@@ -1,0 +1,22 @@
+{
+  "owner": "pancake-github",
+  "name": "zzu-nscc-helper",
+  "display_name": "郑州超算助手",
+  "description": "郑州超算平台专用 Windows 助手：SSL VPN 保活、Clash Verge Rev 自适应分流及 SFTP 上传下载。支持按需安装、配置备份回滚和文件校验。非官方项目，仅适用于本项目说明的郑州超算接入环境。",
+  "visibility": "public",
+  "license": "GPL-3.0-only",
+  "topics": [
+    "zzu",
+    "nscc",
+    "supercomputing",
+    "ssl-vpn",
+    "vpn-keepalive",
+    "clash-verge-rev",
+    "mihomo",
+    "split-tunneling",
+    "sftp",
+    "windows"
+  ],
+  "planned_release": "v0.5.0-beta.1",
+  "publication_state": "public_development_repository_release_not_published"
+}

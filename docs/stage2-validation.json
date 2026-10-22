@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "stage": 2,
+  "version": "0.5.0.dev1",
+  "date_beijing": "2026-10-23",
+  "status": "source_fusion_completed_waiting_stage_confirmation",
+  "scope": "offline_and_local_simulation_only",
+  "python_tests": {
+    "run": 81,
+    "passed": 79,
+    "failed": 0,
+    "skipped": 2,
+    "elapsed_seconds": 27.045,
+    "skip_reason": "Windows symbolic-link creation privilege unavailable; no permissions were changed",
+    "includes_active_transfer_baseline_cases": 35,
+    "includes_active_keepalive_ipc_cases": 7,
+    "includes_generated_routing_javascript_execution": true
+  },
+  "extension_mock_edge_scenarios": {"run": 8, "passed": 8},
+  "gui": {
+    "component_combinations_checked": 7,
+    "preview_pages_rendered_and_inspected": 3,
+    "real_browser_tabs_touched": false,
+    "native_registration_changed_during_tests": false
+  },
+  "privacy": {
+    "worktree_scanned": true,
+    "git_index_scanned": true,
+    "reachable_git_history_scanned": true,
+    "personal_ssh_identity_matches": 0,
+    "private_runtime_data_exported": false,
+    "export_allowlist_enforced": true,
+    "automated_scan_is_not_a_complete_secret_detection_guarantee": true
+  },
+  "preservation": {
+    "original_sources_sha256_unchanged": 21,
+    "historical_baseline_copies_unchanged": true,
+    "production_clash_configuration_modified": false,
+    "existing_transfer_scripts_modified": false,
+    "dependencies_installed_or_upgraded": false
+  },
+  "process_cleanup": {"remaining_project_gui_worker_or_native_host_processes": 0},
+  "publication": {
+    "github_uploaded": false,
+    "release_published": false,
+    "installer_built": false,
+    "one_click_installation_verified": false
+  },
+  "not_yet_verified": [
+    "full_stage_3_regression_matrix",
+    "real_clash_normal_exit_restart_and_effect_validation",
+    "real_sftp_authentication_and_transfer",
+    "installer_component_selection_and_upgrade_migration",
+    "clean_machine_without_python",
+    "packaged_45_minute_keepalive",
+    "real_browser_tab_recovery_and_failure_termination"
+  ]
+}

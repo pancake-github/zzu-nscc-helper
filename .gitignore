@@ -1,0 +1,39 @@
+# Python缓存、虚拟环境和本机构建产物不进入公开仓库。
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+*.exe
+*.dll
+*.pdb
+# 运行日志、用户数据、验收原始记录和配置备份留在本机。
+logs/
+backups/
+acceptance/
+downloads/
+uploads/
+settings.json
+native-host.json
+# 不收录凭据、环境文件和私钥；平台公钥known_hosts可以公开。
+.env
+.env.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+credentials*
+# 个人导出物和认证材料一律留在仓库之外。
+*.pfx
+*.p12
+*.ppk
+*.log
+components.json
+transfer-reports/
+private/
+# 编辑器和系统缓存不进入发布清单。
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

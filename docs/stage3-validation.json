@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "stage": 3,
+  "version": "0.5.0.dev1",
+  "date_beijing": "2026-10-23",
+  "status": "offline_local_service_regression_completed_waiting_stage_confirmation",
+  "python_tests": {
+    "run": 111,
+    "passed": 109,
+    "failed": 0,
+    "skipped": 2,
+    "elapsed_seconds": 40.159,
+    "stage3_new_cases": 30,
+    "skip_reason": "Windows symbolic-link creation privilege unavailable; junction and mocked reparse-point cases passed"
+  },
+  "extension_mock_edge_scenarios": {"run": 8, "passed": 8},
+  "verified": [
+    "multiple_proxy_ports_and_http_or_named_pipe_controllers",
+    "unknown_versions_multiple_clients_pac_and_incompatible_modes_remain_read_only",
+    "vpn_guid_route_identity_dns_and_adapter_rename",
+    "managed_script_manual_edit_and_line_ending_conflicts_are_preserved",
+    "backup_integrity_before_process_operations",
+    "normal_exit_refusal_and_failed_restore_reporting",
+    "stale_runtime_file_rejected_as_restart_evidence",
+    "actual_core_ports_mode_tun_exclusions_and_active_direct_rules_checked_with_fixtures",
+    "real_local_http_and_windows_named_pipe_transports",
+    "five_second_total_local_query_deadline_including_slow_headers",
+    "actual_paramiko_handshake_rejects_changed_ed25519_key_before_password_authentication",
+    "local_trust_resource_change_prevents_password_input",
+    "upload_and_download_cancellation_preserves_success_and_cleans_own_temporary_files",
+    "disconnection_reports_unconfirmed_temporary_cleanup",
+    "unresponsive_worker_termination_and_single_terminal_notification",
+    "unfinished_transaction_blocks_additional_gui_writes",
+    "component_manifest_schema_empty_selection_and_single_component_startup_contract",
+    "frozen_worker_path_has_no_developer_python_dependency",
+    "windows_single_instance_mutex_and_release"
+  ],
+  "test_data": {
+    "accounts_and_passwords_synthetic": true,
+    "temporary_ssh_private_key_memory_only": true,
+    "production_clash_api_queried": false,
+    "production_clash_configuration_modified": false,
+    "real_platform_requests_sent": false,
+    "user_browser_tabs_modified": false,
+    "dependencies_installed_or_upgraded": false,
+    "existing_dependency_deprecation_warnings_observed": true
+  },
+  "publication_boundary": {
+    "private_logs_backups_and_receipts_excluded": true,
+    "original_sources_sha256_unchanged": 21,
+    "github_uploaded": false,
+    "installers_built": false,
+    "clean_machine_installation_verified": false,
+    "packaged_45_minute_keepalive_verified": false,
+    "real_platform_sftp_transfer_verified_for_fused_build": false,
+    "real_browser_recovery_verified_for_fused_build": false
+  }
+}

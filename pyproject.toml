@@ -1,0 +1,20 @@
+# 统一源码入口已经融合；独立安装包仍需后续构建验收。
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zzu-nscc-helper"
+version = "0.5.0b1"
+description = "郑州超算平台专用Windows助手：SSL VPN保活、Clash分流和SFTP传输"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "GPL-3.0-only"
+classifiers = ["Development Status :: 2 - Pre-Alpha", "Operating System :: Microsoft :: Windows :: Windows 11"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+zzu_nscc_helper = ["data/*.json", "data/known_hosts"]
+"zzu_nscc_helper.keepalive" = ["extension/*.json", "extension/*.js", "extension-id.txt", "NativeHost.cs", "native_host.exe"]

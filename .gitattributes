@@ -1,0 +1,4 @@
+# 跨Windows与CI保持可复现的文本换行。
+* text=auto eol=lf
+*.png binary
+*.ico binary

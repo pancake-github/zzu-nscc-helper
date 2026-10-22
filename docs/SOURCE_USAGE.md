@@ -1,0 +1,43 @@
+# 融合源码使用与数据边界
+
+当前为0.5开发验收版，尚无已验证安装器。首版目标为Windows 11 x64；本项目只适用于平台预设中定义的郑州超算SSL VPN环境。不要把源码开发版的测试结果当作安装包已经通过真实联网验收。
+
+## 入口与组件
+
+在已经具备兼容依赖的开发环境中，从仓库根目录运行：
+
+```powershell
+python launcher.py --preview # 安全查看统一界面，不注册扩展、不检测机器、不发送网络请求或写入Clash。
+python launcher.py --components sftp # 只打开SFTP组件，正常启动会进行本机只读环境检测。
+python launcher.py --components keepalive,routing,sftp # 打开全部组件，任务均需用户手动开始。
+```
+
+`keepalive`、`routing`、`sftp`可任意非空组合；未知名称和空选择会被拒绝。后续安装版使用安装器生成的版本化组件清单，并使用独立工作EXE，不寻找开发者机器上的Python路径。当前源码运行仍需要开发环境，尚不能宣称无需Python的一键安装已经完成。
+
+保活组件的Native Host需要在Windows上使用已有C#编译器将`src/zzu_nscc_helper/keepalive/NativeHost.cs`编译为同目录的`native_host.exe`。该产物被Git忽略，后续由Windows构建流程生成。源码不携带个人机器的Native Messaging清单。
+
+## 正常使用流程
+
+软件启动后只读检测VPN目标路由、接口GUID、Clash版本、实际端口和HTTP或Windows命名管道控制器。检测本身不向超算发请求；无法确认VPN身份时，不允许发送保活请求或SSH认证信息。用户更换网卡后应停止任务并重新检测。
+
+- **保活**：首次手动加载随组件提供的Edge扩展；连接状态和版本必须实际显示就绪。选择具体超算标签，再点击“绑定并开始保活”。默认正式模式发真实TLS校验的只读HTTPS请求，成功后等待780秒。帮助菜单中的离线测试仅供故障验收，界面始终标明没有保活流量。
+- **分流**：检测后生成预览，核对精确域名、IP、VPN接口和将改动文件，再点击应用。备份在写入前建立，正常退出并重启Clash后分别检查系统代理、核心规则、DNS和TUN；未知版本、特殊PAC、特殊脚本或未关联验证的目录只读。2.5.8自动修改仅适用于该版本官方当前用户数据目录。回滚记录可在软件重启后重新读取；出现后续配置改动则停止并报告冲突。
+- **SFTP**：选择上传或下载，填写自己的SSH用户名、实际来源路径和目标目录。下载还需明确任务名，保存为“根目录／任务名／北京时间日期”；上传直接使用指定远端目录。点击开始后隐藏输入一次SSH密码。已有同名文件保留并标记未验证；上传成功必须通过完整SFTP回读SHA-256校验。
+
+保活停止不主动取消SFTP。保活或SFTP运行时，分流应用与回滚不可用；分流写入期间也不能启动新的网络任务。X按钮收起到托盘，退出会统一清理自己的工作进程；不会关闭浏览器或自动重新登录VPN。
+
+## 私有数据与回滚
+
+日志、分流计划/备份、原生连接清单和上传回执位于`%LOCALAPPDATA%/ZZU-NSCC-Helper`。下载回执位于用户选择根目录的`_nscc_transfer_reports`子目录。账号密码不填入公开源码；活跃回执不保存独立账号字段或密码，但文件路径可能包含主目录用户名，始终作为私有数据保留。
+
+分流备份包含修改前的真实配置，可能含订阅或控制器密钥，只能留在本机。软件不会自动上传日志、备份或故障报告。公开仓库审核同时检查当前文件、暂存区与可达历史。
+
+受管增强脚本包含完整性摘要；手动修改后会报告冲突，不会静默丢弃改动再套一层脚本。损坏备份或未完成事务会阻止继续应用或回滚，保留本机材料供核对。生效检查还通过本机控制器的只读`/configs`、`/rules`检查核心实际状态，不依赖固定HTTP端口；这些查询不会访问超算，不会调用核心的写入API。
+
+旧独立助手仍在运行时，统一版会提示先停止并退出旧版，以免两套任务争用浏览器连接。已有原生组件指向其他安装时不会自动覆盖；正式迁移流程留待安装器阶段验证。新旧安装均未验证前，不删除旧版或其数据。
+
+## 当前验证边界
+
+本阶段完成源码融合及离线/本机模拟检查。没有用真实账号认证，没有修改正在使用的Clash配置，也没有关闭用户浏览器标签。实际Clash正常退出与重启、生效检查、真实SFTP传输、安装升级、打包后45分钟保活以及真实标签恢复，仍属于后续验收。
+
+上游依据：Clash 2.5.8的数据目录解析见[官方固定版本源码](https://github.com/clash-verge-rev/clash-verge-rev/blob/v2.5.8/src-tauri/src/utils/dirs.rs)；增强脚本入口见[官方扩展配置说明](https://www.clashverge.dev/guide/extend.html)；正常退出采用[Windows Restart Manager](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/nf-restartmanager-rmshutdown)且不使用强制关闭标志。本机核心查询字段依据[Mihomo官方API说明](https://github.com/MetaCubeX/Meta-Docs/blob/main/docs/api/index.md)和[实际规则返回实现](https://github.com/MetaCubeX/mihomo/blob/Meta/hub/route/rules.go)核对。

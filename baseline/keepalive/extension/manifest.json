@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "SSL VPN 助手 · Edge 标签页连接器",
+  "version": "0.4.0",
+  "description": "将 Edge 标签页列表交给本机助手；仅在手动绑定后尝试恢复关闭的超算标签页。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvoz+FFt1kJEhw7m16U4gN7IaXS8I9NfM3p7V6h20nXL/7f4rWOUvgIpZNjiwvYGEAbxP13qHwucO2UCLsB0/LfZOnvT2Y/pTOwMxLZsB1Ni6je3AKRRzL0zgO4DVugS1AFo6OBTGvBHpLUYY1zcTMuXnvC/9gwHCbj378k0GN0RjVzEOzFBSCFnpUyGI3uIe/sfb3a3dRyZwe7qGjsKSY2OOvM9IhOxfSBInr4EiRIPRevB6fmGtsaKv+1plPBOr7zutX7iVO89qr7ifhbSXty6OxTOev6wFbFSXJ/OZWbqcmdSURTk6bouZgsUcETRyz+3U6Y514u1cvvkvPi/GiQIDAQAB",
+  "permissions": [
+    "tabs",
+    "nativeMessaging",
+    "alarms",
+    "webNavigation",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://172.99.2.7/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "连接桌面 SSL VPN 助手"
+  },
+  "incognito": "not_allowed"
+}

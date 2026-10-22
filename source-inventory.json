@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "stage": "source-preparation",
+  "files": [
+    {
+      "source": "apps/vpn-keepalive/app.py",
+      "target": "baseline/keepalive/app.py",
+      "source_sha256": "65b89d43ea76cb02d3332d7ff2064d9c35305fa708d00d9a242ef74c6f787e98",
+      "target_sha256": "c4ec4980e50c618be765815e2fe2f81f4d5ff53e1b4fd1c1eb304a8cc6bb1c7b",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/engine.py",
+      "target": "baseline/keepalive/engine.py",
+      "source_sha256": "b2e49b4ce813d6a7c7b88d3aa295601589b7d832972daacb282ca8a477e7acdb",
+      "target_sha256": "b2e49b4ce813d6a7c7b88d3aa295601589b7d832972daacb282ca8a477e7acdb",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/instance_guard.py",
+      "target": "baseline/keepalive/instance_guard.py",
+      "source_sha256": "b319544b50a44e02fc875535e911d0a54f5d30bd86a25f205f19a92e0ebbd523",
+      "target_sha256": "b319544b50a44e02fc875535e911d0a54f5d30bd86a25f205f19a92e0ebbd523",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/live_request.py",
+      "target": "baseline/keepalive/live_request.py",
+      "source_sha256": "2d70289c5626802c546e49445b600b70edcffdd667aad813555690b666449caa",
+      "target_sha256": "2d70289c5626802c546e49445b600b70edcffdd667aad813555690b666449caa",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/native_setup.py",
+      "target": "baseline/keepalive/native_setup.py",
+      "source_sha256": "3c4afdedc785887904512a2191debdd67b834a082d9b25208674725e495d5d37",
+      "target_sha256": "3c4afdedc785887904512a2191debdd67b834a082d9b25208674725e495d5d37",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/tab_app.py",
+      "target": "baseline/keepalive/tab_app.py",
+      "source_sha256": "04430612ee7727ce17d9c070e05e732e5ef76c1c5d4b55a56b8f63354d617898",
+      "target_sha256": "32144d6ae43f6c0c26a6560b01b94c2b42e460f6449859e8f6b7553ecc0df49b",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/tab_bridge.py",
+      "target": "baseline/keepalive/tab_bridge.py",
+      "source_sha256": "af5052de1ca805c4c5d3467c3f5d55bcd15914374e41167e1ffefab4e2c9ee76",
+      "target_sha256": "af5052de1ca805c4c5d3467c3f5d55bcd15914374e41167e1ffefab4e2c9ee76",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/windows.py",
+      "target": "baseline/keepalive/windows.py",
+      "source_sha256": "4bb0e8f966e450b1c6722746573dc28e3cbb07bea93c846d6afa9f4fbbdfe87b",
+      "target_sha256": "4bb0e8f966e450b1c6722746573dc28e3cbb07bea93c846d6afa9f4fbbdfe87b",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/worker.py",
+      "target": "baseline/keepalive/worker.py",
+      "source_sha256": "81f46843d02b8e5a0e597090d8d045144d27af0200e93713327784f779b3a354",
+      "target_sha256": "81f46843d02b8e5a0e597090d8d045144d27af0200e93713327784f779b3a354",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/NativeHost.cs",
+      "target": "baseline/keepalive/NativeHost.cs",
+      "source_sha256": "5f491c08166b9f260c4a1024e0c0f37dac862a76d3fd046747cf95df63f24838",
+      "target_sha256": "26eec5d98b8a2b333d6529bd22d9eddcbc148d28bf12a234436356c13897b03c",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/extension-id.txt",
+      "target": "baseline/keepalive/extension-id.txt",
+      "source_sha256": "ada831b70e4bddbba043dfa9158dd3edc1eadecba0318c7cea6f2cecdc1fae26",
+      "target_sha256": "ada831b70e4bddbba043dfa9158dd3edc1eadecba0318c7cea6f2cecdc1fae26",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/test_app.py",
+      "target": "baseline/keepalive/test_app.py",
+      "source_sha256": "1efb26b43a8dce1aff4044618207809cd32bdab3d0fc9823559b3de7adca70a5",
+      "target_sha256": "a2eddb8b2c14380285aeea6543d90c31de177722660c7b7daceed7b052d1cc2e",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/test_tabs.py",
+      "target": "baseline/keepalive/test_tabs.py",
+      "source_sha256": "5df385a6c4b75ee9dc0812fbbaa8abf713383fa360fff4885e78569974e596df",
+      "target_sha256": "11569f9fc2b1f45f3430f9455b2324881ac0690033330358637b8955280c2812",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/test_live.py",
+      "target": "baseline/keepalive/test_live.py",
+      "source_sha256": "7f2cb59a709cc7b30547b12724ff85effddac8e5ad8d5e29851a6b2ab02f01d1",
+      "target_sha256": "7f2cb59a709cc7b30547b12724ff85effddac8e5ad8d5e29851a6b2ab02f01d1",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/test_extension.cjs",
+      "target": "baseline/keepalive/test_extension.cjs",
+      "source_sha256": "2b5aae92696ebca7e0295d6e21279dd4c8081c32aec46e767e53936e4a67855a",
+      "target_sha256": "2b5aae92696ebca7e0295d6e21279dd4c8081c32aec46e767e53936e4a67855a",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/extension/background.js",
+      "target": "baseline/keepalive/extension/background.js",
+      "source_sha256": "642b83c56dccff2edc5a86286d016c87ac9d833d0443161cbbaa6d333c21bdbe",
+      "target_sha256": "55df4b313859290ef4c39562184d3fdeae394b8dad0aaa15c552c72b953bf27d",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "apps/vpn-keepalive/extension/manifest.json",
+      "target": "baseline/keepalive/extension/manifest.json",
+      "source_sha256": "b1475b47763421c5bc90813dcc7e40b33444388d2659f2b07c3b6ecaa6c7e4c8",
+      "target_sha256": "8941bb1c0b612309d568ccf0c0693c4910981f6e0fb6c29b075e51feb5002a8f",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "tools/nscc_download.py",
+      "target": "baseline/transfer/nscc_download.py",
+      "source_sha256": "f492e0fba2ec9ef52d189ca9c8e93e12d2aa3efc45e7251a19769706a6f502d2",
+      "target_sha256": "6e5e6297c53673b6f6049aae56d8a55877ce29eff3fb0ee75788bed09d393cad",
+      "transformation": "require_explicit_username"
+    },
+    {
+      "source": "tools/nscc_upload.py",
+      "target": "baseline/transfer/nscc_upload.py",
+      "source_sha256": "c01ce5c68f17c822bca7e3fffcf5afd44ebf0c083a729755279c36cda67267c0",
+      "target_sha256": "466e796b038be5b06e3a6c31eb91f87d79ce70cc6a518f300acedf884a1d966e",
+      "transformation": "require_explicit_username"
+    },
+    {
+      "source": "tools/tests/test_nscc_download.py",
+      "target": "baseline/transfer/tests/test_nscc_download.py",
+      "source_sha256": "df07c2e70cea1efd3b66416c7b097f65eebe9a6d2bae11dbcba6a31e5d83647c",
+      "target_sha256": "df07c2e70cea1efd3b66416c7b097f65eebe9a6d2bae11dbcba6a31e5d83647c",
+      "transformation": "normalize_utf8_newlines"
+    },
+    {
+      "source": "tools/tests/test_nscc_upload.py",
+      "target": "baseline/transfer/tests/test_nscc_upload.py",
+      "source_sha256": "9fe5111ddb489d806f06eff766961482744cf1145ca2e1da867a4cf5e872de41",
+      "target_sha256": "9fe5111ddb489d806f06eff766961482744cf1145ca2e1da867a4cf5e872de41",
+      "transformation": "normalize_utf8_newlines"
+    }
+  ]
+}

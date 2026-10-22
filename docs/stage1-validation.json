@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "stage": 1,
+  "state": "completed_waiting_stage_confirmation",
+  "checked_at": "2026-10-22T21:31:51.674555+08:00",
+  "imported_sources": 21,
+  "originals_unchanged": true,
+  "python_tests": {
+    "keepalive": {
+      "run": 17,
+      "passed": 17,
+      "skipped": 0
+    },
+    "sftp": {
+      "run": 35,
+      "passed": 33,
+      "skipped": 2,
+      "skip_reason": "Windows symbolic link privilege unavailable"
+    },
+    "contracts_and_publication": {
+      "run": 15,
+      "passed": 15,
+      "skipped": 0
+    },
+    "total_run": 67,
+    "total_passed": 65,
+    "total_skipped": 2
+  },
+  "javascript_tests": {
+    "simulated_edge_scenarios": 8,
+    "passed": 8
+  },
+  "live_hpc_requests": 0,
+  "real_file_transfers": 0,
+  "browser_tabs_closed": 0,
+  "clash_configuration_modified": false,
+  "existing_dependencies_changed": false,
+  "github_uploaded": false,
+  "unified_gui_completed": false,
+  "installer_completed": false,
+  "release_tag_created": false,
+  "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+}

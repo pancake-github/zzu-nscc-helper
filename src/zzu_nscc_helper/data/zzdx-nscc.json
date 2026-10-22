@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "id": "zzdx-nscc",
+  "name": "郑州超算平台",
+  "scope": "仅适用于本项目说明的郑州超算SSL VPN接入环境，非官方项目",
+  "compatibility": {
+    "os": "Windows 11 x64",
+    "browser": "Microsoft Edge",
+    "clash_verge_rev_versions": ["2.5.8"],
+    "automatic_write_fake_ip_modes": ["blacklist"]
+  },
+  "vpn": {
+    "gateway": "222.22.12.2",
+    "gateway_port": 6443,
+    "dns": "172.99.2.11"
+  },
+  "keepalive": {
+    "address": "172.99.2.7",
+    "port": 443,
+    "tls_name": "v.zzu.edu.cn",
+    "resource": "/ac/console3/index.html",
+    "interval_seconds": 780,
+    "connect_timeout_seconds": 5,
+    "total_timeout_seconds": 20,
+    "body_limit_bytes": 65536,
+    "status": 200,
+    "content_markers": ["ac-ui", "id=\"app\"", "/sso/themes/sso/favicon.ico"]
+  },
+  "sftp": {
+    "host": "172.99.1.100",
+    "port": 22,
+    "host_key_resource": "known_hosts",
+    "host_key_fingerprint": "SHA256:tC7Q4zr9XmfXFTzVNGbm6gvVLQr9+MLhEbkoUmfpbzI"
+  },
+  "routing": {
+    "system_proxy_bypass": ["172.99.2.7", "172.99.2.103", "222.22.12.2", "eshell01.v.zzu.edu.cn", "ai01.v.zzu.edu.cn", "hpc01.v.zzu.edu.cn", "efile02.v.zzu.edu.cn", "efile01.v.zzu.edu.cn"],
+    "tun_exclusions": ["222.22.12.2/32"],
+    "dns_domains": ["eshell01.v.zzu.edu.cn", "ai01.v.zzu.edu.cn", "hpc01.v.zzu.edu.cn", "efile02.v.zzu.edu.cn", "efile01.v.zzu.edu.cn"],
+    "fake_ip_exclusions": ["eshell01.v.zzu.edu.cn", "ai01.v.zzu.edu.cn", "hpc01.v.zzu.edu.cn", "efile02.v.zzu.edu.cn", "efile01.v.zzu.edu.cn"]
+  },
+  "services": {
+    "platform": "https://172.99.2.7/ac/console3/index.html",
+    "ticket": "http://172.99.2.103/",
+    "eshell_port": 6081,
+    "compute_port": 7091,
+    "efile_port": 443,
+    "fast_transfer_port": 8091
+  }
+}
