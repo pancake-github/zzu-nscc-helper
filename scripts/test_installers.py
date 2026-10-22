@@ -82,12 +82,16 @@ def main():  # CI使用一次性机器，不能在个人机器偷偷执行整套
                 checked = json.loads(execute([str(root / 'zzu-nscc-maintenance.exe'), 'self-test'], env=environment).stdout.decode('utf-8'))  # 加载真实冻结组件。
                 if not checked['ok'] or checked['components'] != ['routing', 'sftp'] or marker.read_bytes() != b'preserve synthetic local data':  # 不丢组件或私有资料。
                     raise ValueError('UPGRADE_ADD_COMPONENT_FAILED')  # 不发布半通过结果。
+                before = (root / 'components.json').read_bytes()  # 被拒绝的静默移除不得改变既有清单。
+                refused = subprocess.run(common + ['/COMPONENTS=routing'], capture_output=True, timeout=60, creationflags=subprocess.CREATE_NO_WINDOW, env=environment)  # 只操作本次临时安装。
+                if refused.returncode == 0 or (root / 'components.json').read_bytes() != before or not (root / 'modules/zzu_nscc_helper/transfer/nscc_download.py').is_file():  # 不能只隐藏仍在磁盘的组件。
+                    raise ValueError('SILENT_COMPONENT_REMOVAL_NOT_BLOCKED')  # 静默路径必须和交互路径一致。
             finally:  # 不遗留注册和卸载项。
                 if (root / 'unins000.exe').is_file():  # 仅运行自己的卸载器。
                     execute([str(root / 'unins000.exe'), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], env=environment)  # 不删除私有备份。
             if marker.read_bytes() != b'preserve synthetic local data':  # 卸载也必须保留资料。
                 raise ValueError('UNINSTALL_REMOVED_PRIVATE_DATA')  # 明确失败。
-            safety.append({'kind': kind, 'case': 'upgrade_add_component_and_preserve_private_data', 'passed': True})  # 无私人路径。
+            safety.append({'kind': kind, 'case': 'upgrade_add_component_and_preserve_private_data', 'passed': True, 'silent_component_removal_blocked': True})  # 无私人路径。
     with tempfile.TemporaryDirectory(prefix='zzu-broken-payload-') as temporary:  # 模拟下载不完整或缓存损坏。
         root = Path(temporary) / 'program'  # 不影响任何已安装软件。
         cache = Path(temporary) / 'cache'  # 本轮故障材料。

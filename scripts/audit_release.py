@@ -26,6 +26,10 @@ def audit(folder):  # 本机和CI共用，不读取本机用户数据。
             errors.append('ASSET_CREDENTIAL_PATTERN')  # 不回显认证信息。
         if path.suffix == '.zip':  # 每个成员都检查，不能只检查ZIP名字。
             with zipfile.ZipFile(path) as stream:  # 不解压到用户目录。
+                if path.name == 'core.zip':  # 公开安装包必须携带主要运行库的实际完整许可。
+                    required = {'LICENSE', 'licenses/Python/LICENSE.txt', 'licenses/PyQt5/LICENSE', 'licenses/PyQt5-Qt5/LICENSE', 'licenses/PyQt5-sip/LICENSE', 'licenses/paramiko/LICENSE', 'corresponding-sources.json', 'build-info.json'}  # 不以外部链接代替包内许可。
+                    if not required.issubset(stream.namelist()) or any(len(stream.read(name)) < 100 for name in required if name in stream.namelist()):  # 空文件也不能充数。
+                        errors.append('RUNTIME_LICENSE_OR_SOURCE_INDEX_MISSING')  # 阻止保留或上传不完整分发材料。
                 for item in stream.infolist():  # 真实成员集合。
                     name = PurePosixPath(item.filename)  # ZIP标准相对路径。
                     if name.is_absolute() or '..' in name.parts or '\\' in item.filename or ':' in item.filename or (item.external_attr >> 16) & 0o170000 == 0o120000:  # 禁止越界路径或符号链接。

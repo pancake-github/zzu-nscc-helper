@@ -2,11 +2,13 @@
 import argparse  # 构建参数只指定固定工具位置。
 import hashlib  # 所有下载和载荷都固定校验。
 import importlib.metadata as metadata  # 记录实际构建依赖。
+import io  # 只在内存读取经过哈希校验的上游源码包。
 import json  # 版本化构建元数据。
 from pathlib import Path  # 构建产物全部限制在仓库dist内。
 import shutil  # 从已审计源码白名单复制。
 import subprocess  # 不使用shell执行工具。
 import sys  # 仅使用CI当前解释器。
+import tarfile  # 读取固定许可证成员，不解压任意路径。
 import urllib.request  # 获取固定版本的公开对应源码索引。
 import zipfile  # 生成可独立校验的组件包。
 ROOT = Path(__file__).resolve().parents[1]  # 独立发布仓库。
@@ -33,6 +35,11 @@ def payloads():  # 已完成PyInstaller构建后拆分载荷。
         shutil.copy2(ROOT / name, core / name)  # 不复制个人文档。
     licenses = core / 'licenses'  # 安装包自带第三方版权说明。
     licenses.mkdir(exist_ok=True)  # 构建目录内可重复生成。
+    python_license = Path(sys.base_prefix) / 'LICENSE.txt'  # 使用官方构建解释器自带的完整许可与版权声明。
+    if not python_license.is_file():  # 不以项目GPL代替Python许可。
+        raise ValueError('PYTHON_LICENSE_MISSING')  # 缺少分发材料时阻止打包。
+    (licenses / 'Python').mkdir(exist_ok=True)  # 与第三方发行包分开命名。
+    shutil.copy2(python_license, licenses / 'Python/LICENSE.txt')  # 原样附带全部解释器许可。
     dependencies = []  # 按实际安装版本生成物料清单。
     source_index = json.loads((ROOT / 'packaging/runtime-sources.json').read_text(encoding='utf-8'))  # 已独立核验的Python及Qt对应源码。
     for dist in sorted(metadata.distributions(), key=lambda item: item.metadata['Name'].casefold()):  # CI为此项目的隔离环境。
@@ -44,6 +51,20 @@ def payloads():  # 已完成PyInstaller构建后拆分载荷。
             sources = [{'url': entry['url'], 'sha256': entry['digests']['sha256']} for entry in info['urls'] if entry['packagetype'] == 'sdist']  # 对应版本实际源代码归档与哈希。
             if sources:  # 没有源码归档的包装轮子由明确运行库源代码条目覆盖。
                 source_index['sources'].append({'name': distribution, 'version': dist.version, 'archives': sources})  # 不包含个人路径或认证。
+            if distribution.casefold() == 'pyqt5':  # 此版本Windows轮子未携带LICENSE文件，必须从同版源码补齐。
+                source = sources[0]  # 同版官方PyPI元数据确定的源码与SHA256。
+                if not source['url'].startswith('https://files.pythonhosted.org/'):  # 不将元数据当任意下载指令。
+                    raise ValueError('PYQT_SOURCE_HOST_INVALID')  # 只允许官方包分发主机。
+                with urllib.request.urlopen(source['url'], timeout=30) as response:  # 构建时下载，不影响用户现有Python。
+                    body = response.read(64 * 1024 * 1024 + 1)  # 有界读取，避免异常大小。
+                if len(body) > 64 * 1024 * 1024 or hashlib.sha256(body).hexdigest() != source['sha256']:  # 对照官方同版源码哈希。
+                    raise ValueError('PYQT_SOURCE_HASH_FAILED')  # 不接受未知许可材料。
+                with tarfile.open(fileobj=io.BytesIO(body), mode='r:*') as archive_source:  # 不向磁盘解压源码树。
+                    member = archive_source.getmember('PyQt5-' + dist.version + '/LICENSE')  # 只读取明确根目录许可。
+                    if not member.isfile() or member.size > 1024 * 1024:  # 不跟随链接或读取异常材料。
+                        raise ValueError('PYQT_LICENSE_INVALID')  # 阻止发布缺失许可的包。
+                    (licenses / 'PyQt5').mkdir(exist_ok=True)  # 实际分发包专属目录。
+                    (licenses / 'PyQt5/LICENSE').write_bytes(archive_source.extractfile(member).read())  # 保留上游原始GPL全文。
         for item in dist.files or ():  # 只复制许可证和版权文件。
             if Path(item).name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE')):  # 不复制包缓存或其他项目数据。
                 source = Path(dist.locate_file(item))  # 来自已安装发行包。
@@ -52,7 +73,8 @@ def payloads():  # 已完成PyInstaller构建后拆分载荷。
                     target.parent.mkdir(parents=True, exist_ok=True)  # 不包含用户名。
                     if not target.exists():  # 不覆盖同一包已有版权文件。
                         shutil.copy2(source, target)  # 原文保留。
-    (core / 'build-info.json').write_text(json.dumps({'schema': 1, 'version': SETTINGS['version'], 'dependencies': dependencies}, indent=2), encoding='utf-8')  # 可公开、无本机账号。
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()  # 固定产物与实际公开源码的对应关系。
+    (core / 'build-info.json').write_text(json.dumps({'schema': 1, 'version': SETTINGS['version'], 'source_commit': commit, 'dependencies': dependencies}, indent=2), encoding='utf-8')  # 可公开、无本机账号。
     (core / 'corresponding-sources.json').write_text(json.dumps(source_index, ensure_ascii=False, indent=2), encoding='utf-8')  # 安装目录提供确切版本和源码获取位置。
     manifest = {'schema': 1, 'version': SETTINGS['version'], 'tag': SETTINGS['tag'], 'units': {}}  # 安装器的固定版本清单。
     manifest['units']['core'] = archive(core, output / 'core.zip')  # 公共运行库只打包一次。

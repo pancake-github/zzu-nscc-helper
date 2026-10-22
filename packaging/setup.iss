@@ -55,6 +55,12 @@ function Chosen: String; { 安装清单与GUI使用相同的三个编号。 }
 begin
   Result := WizardSelectedComponents(False);
 end;
+function RemovingInstalledComponent: Boolean; { 静默安装和交互安装共用移除保护。 }
+var Previous: String;
+begin
+  Previous := GetPreviousData('InstalledComponents', '');
+  Result := ((Pos('keepalive', Previous) > 0) and not WizardIsComponentSelected('keepalive')) or ((Pos('routing', Previous) > 0) and not WizardIsComponentSelected('routing')) or ((Pos('sftp', Previous) > 0) and not WizardIsComponentSelected('sftp'));
+end;
 function IdleAt(const Root: String): Boolean; { 不强制结束助手或浏览器。 }
 var Code: Integer; Tool: String;
 begin
@@ -84,6 +90,7 @@ function PrepareToInstall(var NeedsRestart: Boolean): String; { 全部下载和�
 begin
   Result := '';
   if Chosen = '' then begin Result := '请至少选择一项安装组件。'; Exit; end;
+  if RemovingInstalledComponent then begin Result := '升级支持添加组件；移除组件请先卸载再安装。当前文件与清单未修改。'; Exit; end;
   if not IdleAt(ExpandConstant('{app}')) then begin Result := '请先停止任务并退出当前助手，再继续安装。'; Exit; end;
   try
     PayloadCache := ExpandConstant('{param:PAYLOADDIR|}');
@@ -107,13 +114,11 @@ begin
   DownloadPage := CreateDownloadPage('下载所选组件', '下载并校验 SHA-256 后才开始安装。', nil);
 end;
 function NextButtonClick(CurPageID: Integer): Boolean; { 空选择和升级时移除已装组件都需明确处理。 }
-var Previous: String;
 begin
   Result := True;
   if CurPageID = wpSelectComponents then begin
     if Chosen = '' then begin MsgBox('请至少选择一项功能。', mbError, MB_OK); Result := False; Exit; end;
-    Previous := GetPreviousData('InstalledComponents', '');
-    if ((Pos('keepalive', Previous) > 0) and not WizardIsComponentSelected('keepalive')) or ((Pos('routing', Previous) > 0) and not WizardIsComponentSelected('routing')) or ((Pos('sftp', Previous) > 0) and not WizardIsComponentSelected('sftp')) then begin
+    if RemovingInstalledComponent then begin
       MsgBox('本版升级支持添加组件。若要移除已有组件，请先卸载后重新选择；个人日志和备份会保留。', mbInformation, MB_OK);
       Result := False;
     end;
