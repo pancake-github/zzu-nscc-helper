@@ -13,8 +13,16 @@ sys.path.insert(0, str(ROOT / 'src'))  # 不安装包。
 sys.path.insert(0, str(ROOT / 'scripts'))  # 导入资产审核模块。
 from zzu_nscc_helper import installation  # 活跃安装迁移逻辑。
 from audit_release import BAD_BYTES  # 真实构建资产审核器。
+from zzu_nscc_helper.keepalive.acceptance import continuous_passes  # 持续验收判定不会发起请求。
 
 class InstallationTests(unittest.TestCase):  # 迁移必须可重入且不能覆盖外部修改。
+    def test_continuous_acceptance_requires_all_evidence(self):  # 不能把不足45分钟或有采样缺口的测试算通过。
+        receipts = [{'offset_seconds': offset, 'status': 200, 'tls_verified': True, 'bytes': 100} for offset in (0, 781, 1562, 2343)]  # 合成协议摘要，不访问平台。
+        self.assertTrue(continuous_passes(receipts, 2700, 1.1, [], []))  # 全部门槛满足。
+        for values in ((receipts, 2699, 1, [], []), (receipts, 2700, 31, [], []), (receipts, 2700, 1, ['candidate'], []), (receipts, 2700, 1, [], ['missing']), (receipts[:3], 2700, 1, [], [])):  # 每种证据缺失分别拒绝。
+            self.assertFalse(continuous_passes(*values))  # 不拼接或补造记录。
+        receipts[1]['tls_verified'] = False  # 模拟未验证证书。
+        self.assertFalse(continuous_passes(receipts, 2700, 1, [], []))  # 必须停止而非降级。
     def test_artifact_scan_distinguishes_parser_labels_from_key_material(self):  # 加密库内置格式字符串不是私人密钥。
         opening = b'-----BEGIN ' + b'PRIVATE KEY-----'  # 拼接无效合成材料，不包含实际密钥。
         closing = b'-----END ' + b'PRIVATE KEY-----'  # 只验证扫描边界。

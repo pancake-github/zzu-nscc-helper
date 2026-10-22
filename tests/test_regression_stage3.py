@@ -212,7 +212,7 @@ class ProcessProtocolTests(unittest.TestCase):  # 工作进程无效输出不能
             with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', str(root / 'zzu-nscc-helper.exe')):  # 合成打包状态。
                 manifest.write_text(json.dumps({'schema': 1, 'components': ['sftp']}), encoding='utf-8')  # 单组件清单。
                 self.assertEqual(installed_components(), ('sftp',))  # 只打开已安装组件。
-                self.assertEqual(worker_command(), [str(root / 'zzu-nscc-worker.exe')])  # 不寻找开发者解释器。
+                self.assertEqual(worker_command(), [str(root.resolve() / 'zzu-nscc-worker.exe')])  # 比较真实目录，兼容Windows临时目录的8.3短名称。
                 for value in ({'schema': 999, 'components': ['sftp']}, {'schema': 1, 'components': []}):  # 升级与损坏清单边界。
                     manifest.write_text(json.dumps(value), encoding='utf-8')  # 修改测试文件。
                     with self.assertRaises(ValueError):  # 必须在启动任务前失败。

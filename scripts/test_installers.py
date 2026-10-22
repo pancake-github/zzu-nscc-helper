@@ -48,6 +48,7 @@ def main():  # CI使用一次性机器，不能在个人机器偷偷执行整套
                     actual = json.loads((root / 'components.json').read_text(encoding='utf-8'))  # 核对落盘选择。
                     if actual != {'schema': 1, 'components': list(selected)}:  # 不接受默认全部。
                         raise ValueError('INSTALLED_COMPONENTS_MISMATCH')  # 明确失败。
+                    execute([str(root / 'zzu-nscc-helper.exe'), '--preview', '--smoke-test'], env=environment)  # 真正运行GUI EXE并验证正常退出。
                     for component, relative in {'keepalive': 'keepalive', 'routing': 'routing.py', 'sftp': 'transfer'}.items():  # 未选组件必须实际不存在。
                         if (root / 'modules/zzu_nscc_helper' / relative).exists() != (component in selected):  # 不靠隐藏标签页冒充组件安装。
                             raise ValueError('UNSELECTED_COMPONENT_INSTALLED')  # 阻止发布。

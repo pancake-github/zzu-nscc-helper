@@ -173,12 +173,19 @@ def self_test(root):  # 无平台流量的冻结程序检查。
 
 def main():  # 只能由固定维护EXE进入。
     parser = argparse.ArgumentParser(description=__doc__)  # 不接受任意路径、主机或凭据。
-    parser.add_argument('action', choices=('check-idle', 'configure', 'unregister', 'self-test'))  # 固定维护职责。
+    parser.add_argument('action', choices=('check-idle', 'configure', 'unregister', 'self-test', 'acceptance-45'))  # 真实持续验收必须显式调用。
     parser.add_argument('--components')  # 安装器生成的组件编号。
+    parser.add_argument('--output', type=Path)  # 真实验收输出仅保存在本机。
+    parser.add_argument('--tab-id', type=int)  # 控制器明确指定新建验收标签的真实编号。
     args = parser.parse_args()  # 无认证参数。
     root = Path(sys.executable).resolve().parent  # 不接受外部安装目录。
     try:  # 输出固定类别，避免路径泄漏到CI日志。
-        if args.action == 'self-test':  # 离线验收不修改注册。
+        if args.action == 'acceptance-45':  # 不在普通启动或安装过程中运行。
+            if args.output is None or args.tab_id is None:  # 缺少真实目标不生成占位操作。
+                raise ValueError('ACCEPTANCE_ARGUMENTS_REQUIRED')  # 不开始请求。
+            from .keepalive.acceptance import run  # 只安装保活组件时此入口才可用。
+            return run(args.output.resolve(), args.tab_id)  # 同一冻结GUI与后台工作程序。
+        elif args.action == 'self-test':  # 离线验收不修改注册。
             result = self_test(root)  # 检查真实打包产物。
         elif not idle():  # 安装、升级和卸载都不能抢占任务。
             result = {'ok': False, 'error': 'ASSISTANT_RUNNING'}  # 用户自行结束现有任务。

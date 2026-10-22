@@ -513,7 +513,10 @@ def main():  # 无开机自启、无任务自动恢复。
     parser = argparse.ArgumentParser(description='郑州超算助手')  # 不接受凭据参数。
     parser.add_argument('--components')  # 源码组件组合验收。
     parser.add_argument('--preview', action='store_true')  # 安全界面验收模式。
+    parser.add_argument('--smoke-test', action='store_true')  # 明确离线预览时验证真实GUI EXE入口后自动退出。
     args = parser.parse_args()  # 不读取环境口令。
+    if args.smoke_test and not args.preview:  # 自检不能自动启动真实检测或任务。
+        parser.error('--smoke-test必须与--preview一起使用。')  # 不进入正式会话。
     application = QApplication(sys.argv[:1])  # 不把应用参数交Qt解析。
     application.setQuitOnLastWindowClosed(False)  # 正常收起到托盘。
     from .instance import InstanceGuard  # 共享组件单实例，不依赖Edge。
@@ -557,6 +560,8 @@ def main():  # 无开机自启、无任务自动恢复。
     server.newConnection.connect(awaken)  # 唤醒入口。
     application.aboutToQuit.connect(window.cleanup)  # 最终清理保障。
     window.show()  # 用户选择组件内的实际动作。
+    if args.smoke_test:  # CI启动真正无控制台GUI EXE，而非只导入控件。
+        QTimer.singleShot(1500, window.finish_quit)  # 正常事件循环后释放锁、托盘和所有子对象。
     result = application.exec_()  # Qt事件循环。
     server.close()  # 释放唤醒通道。
     guard.close()  # 释放单实例锁。
