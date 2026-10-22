@@ -26,7 +26,8 @@ jobs:
           architecture: x64
       - name: Install isolated build dependencies
         shell: pwsh
-        run: python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r packaging/requirements-build.lock
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r packaging/requirements-build.lock
       - name: Audit all exported sources and Git history
         shell: pwsh
         run: python -B scripts/audit_public_tree.py

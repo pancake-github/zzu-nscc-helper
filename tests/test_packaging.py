@@ -7,12 +7,17 @@ import sys  # 导入活跃源码。
 import tempfile  # 独立测试材料。
 import unittest  # 现有标准库测试框架。
 from unittest.mock import patch  # 不访问真实注册表或生产进程。
+import yaml  # 工作流必须先通过语法检查。
 ROOT = Path(__file__).resolve().parents[1]  # 独立仓库。
 sys.path.insert(0, str(ROOT / 'src'))  # 不安装包。
 sys.path.insert(0, str(ROOT / 'scripts'))  # 导入资产审核模块。
 from zzu_nscc_helper import installation  # 活跃安装迁移逻辑。
 
 class InstallationTests(unittest.TestCase):  # 迁移必须可重入且不能覆盖外部修改。
+    def test_workflow_is_valid_yaml(self):  # 防止命令参数中的冒号让云构建根本无法启动。
+        workflow = yaml.load((ROOT / '.github/workflows/build.yml').read_text(encoding='utf-8'), Loader=yaml.BaseLoader)  # 只解析配置，不执行动作。
+        self.assertIn('push', workflow['on'])  # 推送能触发候选构建。
+        self.assertTrue(workflow['jobs']['build']['steps'])  # 有实际构建步骤。
     def setUp(self):  # 每个测试独立安装与数据树。
         self.temp = tempfile.TemporaryDirectory()  # 不使用用户AppData。
         self.addCleanup(self.temp.cleanup)  # 测试后只清理本次目录。
