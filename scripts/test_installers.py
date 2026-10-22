@@ -11,6 +11,12 @@ import tempfile  # 每一轮独立临时安装位置。
 def execute(command, **options):  # 超时、失败保留真实错误码。
     completed = subprocess.run(command, capture_output=True, timeout=240, creationflags=subprocess.CREATE_NO_WINDOW, **options)  # 只运行本次安装器或其EXE。
     if completed.returncode:  # 日志只留固定类别，不打印安装目录或原始输出。
+        try:  # 本产品维护EXE只有受限JSON输出。
+            value = json.loads(completed.stdout.decode('utf-8'))  # 不打印任意安装器文本。
+            diagnostic = {key: value[key] for key in ('ok', 'error', 'exception_type', 'missing_module', 'components', 'external_python_modules', 'external_native_libraries', 'frozen', 'tabs', 'workers_running') if key in value}  # 不包含目录、账户或正文。
+            print(json.dumps({'command': Path(command[0]).name, 'diagnostic': diagnostic}))  # 保留可修复的技术原因。
+        except (ValueError, UnicodeError, TypeError):  # 安装器没有JSON时不回显原始输出。
+            pass  # 只由下面固定代码报告。
         raise ValueError('INSTALLER_COMMAND_FAILED_' + str(completed.returncode))  # 不将失败忽略。
     return completed  # 自检结果在内存中解析。
 

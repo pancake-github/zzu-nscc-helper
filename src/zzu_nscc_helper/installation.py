@@ -195,8 +195,12 @@ def main():  # 只能由固定维护EXE进入。
             result = unregister(root)  # 不删除日志、研究或规则备份。
         else:  # 只读空闲检查。
             result = {'ok': True}  # 没有助手运行。
-    except Exception:  # 详细私人路径不进入安装或CI输出。
-        result = {'ok': False, 'error': 'MAINTENANCE_FAILED'}  # 失败必须可见。
+    except Exception as error:  # 详细私人路径不进入安装或CI输出。
+        known = ('MAINTENANCE_CONFLICT', 'NATIVE_REGISTRATION_CONFLICT', 'NATIVE_MIGRATION_CONFLICT', 'COMPONENT_PAYLOAD_MISSING', 'NATIVE_PAYLOAD_MISSING', 'MODULE_ENUMERATION_FAILED', 'MODULE_PATH_UNAVAILABLE', 'KEEPALIVE_ACCEPTANCE_UNAVAILABLE', 'ACCEPTANCE_OUTPUT_EXISTS', 'ASSISTANT_RUNNING', 'INSTANCE_CHANNEL_UNAVAILABLE', 'VPN_NOT_CONNECTED', 'ACCEPTANCE_ARGUMENTS_REQUIRED')  # 只公开本软件定义的固定类别。
+        result = {'ok': False, 'error': str(error) if type(error) is ValueError and str(error) in known else 'MAINTENANCE_FAILED'}  # 不回显系统异常、原始配置或路径。
+        result['exception_type'] = type(error).__name__  # 异常类型有助于诊断，不含异常原文或私人路径。
+        if isinstance(error, ModuleNotFoundError) and error.name and all(part.isidentifier() for part in error.name.split('.')):  # 只允许普通模块标识符。
+            result['missing_module'] = error.name  # 不返回任意加载路径。
     print(json.dumps(result, ensure_ascii=True))  # 固定小型协议。
     return 0 if result.get('ok') else 1  # 安装器必须检查退出码。
 

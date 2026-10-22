@@ -57,12 +57,19 @@ jobs:
         shell: pwsh
         run: python -B scripts/build_release.py --iscc "$env:ZZU_ISCC"
       - name: Audit packaged assets
+        id: asset_audit
         shell: pwsh
         run: python -B scripts/audit_release.py dist/release
       - name: Validate all component combinations with exact installers
         shell: pwsh
         run: python -B scripts/test_installers.py dist/release
+      - name: Recheck privacy before retaining candidate assets
+        if: ${{ !cancelled() && steps.asset_audit.outcome == 'success' }}
+        id: final_audit
+        shell: pwsh
+        run: python -B scripts/audit_release.py dist/release
       - name: Upload candidate artifacts without publishing a Release
+        if: ${{ !cancelled() && steps.final_audit.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: windows-candidate-${{ github.sha }}
