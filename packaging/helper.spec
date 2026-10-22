@@ -2,8 +2,8 @@
 from pathlib import Path  # 路径以构建仓库为准。
 from PyInstaller.utils.hooks import collect_all, copy_metadata  # 收集冻结运行所需依赖及许可证元数据。
 root = Path(SPECPATH).parent  # 不引用开发者环境路径。
-data, binaries, hidden = [], [], []  # 所有三个入口共享一致的第三方运行库。
-for package in ('PyQt5', 'requests', 'urllib3', 'certifi', 'paramiko', 'cryptography', 'bcrypt', 'nacl', 'yaml', 'psutil', 'cffi'):  # 固定依赖白名单。
+data, binaries, hidden = [], [], ['PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets', 'PyQt5.QtNetwork']  # Qt使用官方钩子，只收集实际需要的界面和本机通信模块。
+for package in ('requests', 'urllib3', 'certifi', 'paramiko', 'cryptography', 'bcrypt', 'nacl', 'yaml', 'psutil', 'cffi'):  # 不再把未使用的Qt3D、WebView或QML运行库装入公共包。
     found_data, found_bins, found_hidden = collect_all(package)  # 包括动态扩展和证书资源。
     data.extend(found_data)  # 不收集用户AppData或运行日志。
     binaries.extend(found_bins)  # 仅隔离构建环境的运行库。

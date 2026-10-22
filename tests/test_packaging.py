@@ -32,6 +32,18 @@ class InstallationTests(unittest.TestCase):  # 迁移必须可重入且不能覆
         workflow = yaml.load((ROOT / '.github/workflows/build.yml').read_text(encoding='utf-8'), Loader=yaml.BaseLoader)  # 只解析配置，不执行动作。
         self.assertIn('push', workflow['on'])  # 推送能触发候选构建。
         self.assertTrue(workflow['jobs']['build']['steps'])  # 有实际构建步骤。
+
+    def test_self_check_accepts_idle_controller_and_rejects_external_runtime(self):  # 未启动过的后台对象没有QProcess。
+        manifest = self.root / 'components.json'  # 模拟已安装保活组件。
+        manifest.write_text(json.dumps({'schema': 1, 'components': ['keepalive']}), encoding='utf-8')  # 只读清单。
+        with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', str(self.root / 'zzu-nscc-maintenance.exe')), patch.dict(os.environ, {'LOCALAPPDATA': str(self.data), 'QT_QPA_PLATFORM': 'offscreen'}):  # 不注册或联网。
+            result = installation.self_test(self.root)  # 实际预览控件、控制器及原生模块观测。
+        self.assertFalse(result['ok'])  # 源码运行依赖外部解释器，必须如实拒绝冒充冻结程序通过。
+        self.assertFalse(result['workers_running'])  # 确实没有启动工作进程。
+        self.assertEqual(result['tabs'], 1)  # 构造了实际保活页。
+        self.assertTrue(result['external_python_modules'])  # 检出了真实开发环境依赖。
+        import logging  # 只读检查本次预览日志是否释放。
+        self.assertFalse(logging.getLogger('vpn-assistant').handlers)  # 异常路径也不能留下文件句柄。
     def setUp(self):  # 每个测试独立安装与数据树。
         self.temp = tempfile.TemporaryDirectory()  # 不使用用户AppData。
         self.addCleanup(self.temp.cleanup)  # 测试后只清理本次目录。

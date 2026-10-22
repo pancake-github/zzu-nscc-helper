@@ -63,7 +63,43 @@ def main():  # CI使用一次性机器，不能在个人机器偷偷执行整套
                     uninstaller = root / 'unins000.exe'  # 不搜索其他安装。
                     if uninstaller.is_file():  # 即使后置注册失败也尝试撤销。
                         execute([str(uninstaller), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], env=environment)  # 仅保留本轮私有记录，临时根由标准库清理。
-    report = {'schema': 1, 'status': 'component_matrix_passed', 'cases': records, 'real_platform_tested': False, 'clean_windows11_tested': False, 'online_github_download_tested': False}  # 精确声明测试边界。
+    safety = []  # 升级、保留用户资料和坏载荷分别记录。
+    for kind in ('offline', 'online'):  # 两种安装器都必须能添加组件。
+        with tempfile.TemporaryDirectory(prefix='zzu-upgrade-') as temporary:  # 与十四轮新装隔离。
+            root = Path(temporary) / 'program'  # 本轮唯一安装目录。
+            private = Path(temporary) / 'local-data'  # 本轮私有数据。
+            environment['LOCALAPPDATA'] = str(private)  # 仅传给受控子进程。
+            installer = output / ('zzu-nscc-helper-' + kind + '-' + version + '-x64.exe')  # 相同被测字节。
+            common = [str(installer), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/DIR=' + str(root), '/TASKS=']  # 不启动GUI或平台请求。
+            if kind == 'online':  # 发布前使用同一固定哈希缓存。
+                common.append('/PAYLOADDIR=' + str(output))  # 不换包、不重新编译测试版。
+            try:  # 成功或失败都回收本轮安装。
+                execute(common + ['/COMPONENTS=routing'], env=environment)  # 首次仅装分流。
+                marker = private / 'ZZU-NSCC-Helper/backups/preserve-user-data.txt'  # 合成本机备份材料。
+                marker.parent.mkdir(parents=True, exist_ok=True)  # 只创建测试私有目录。
+                marker.write_bytes(b'preserve synthetic local data')  # 不是真实用户配置。
+                execute(common + ['/COMPONENTS=routing,sftp'], env=environment)  # 升级添加SFTP。
+                checked = json.loads(execute([str(root / 'zzu-nscc-maintenance.exe'), 'self-test'], env=environment).stdout.decode('utf-8'))  # 加载真实冻结组件。
+                if not checked['ok'] or checked['components'] != ['routing', 'sftp'] or marker.read_bytes() != b'preserve synthetic local data':  # 不丢组件或私有资料。
+                    raise ValueError('UPGRADE_ADD_COMPONENT_FAILED')  # 不发布半通过结果。
+            finally:  # 不遗留注册和卸载项。
+                if (root / 'unins000.exe').is_file():  # 仅运行自己的卸载器。
+                    execute([str(root / 'unins000.exe'), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], env=environment)  # 不删除私有备份。
+            if marker.read_bytes() != b'preserve synthetic local data':  # 卸载也必须保留资料。
+                raise ValueError('UNINSTALL_REMOVED_PRIVATE_DATA')  # 明确失败。
+            safety.append({'kind': kind, 'case': 'upgrade_add_component_and_preserve_private_data', 'passed': True})  # 无私人路径。
+    with tempfile.TemporaryDirectory(prefix='zzu-broken-payload-') as temporary:  # 模拟下载不完整或缓存损坏。
+        root = Path(temporary) / 'program'  # 不影响任何已安装软件。
+        cache = Path(temporary) / 'cache'  # 本轮故障材料。
+        cache.mkdir()  # 不复制其他项目数据。
+        (cache / 'core.zip').write_bytes(b'incomplete synthetic payload')  # 故意不符合内嵌SHA-256。
+        environment['LOCALAPPDATA'] = str(Path(temporary) / 'local-data')  # 只影响子进程。
+        installer = output / ('zzu-nscc-helper-online-' + version + '-x64.exe')  # 同一在线安装器。
+        failed = subprocess.run([str(installer), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/DIR=' + str(root), '/COMPONENTS=routing', '/TASKS=', '/PAYLOADDIR=' + str(cache)], capture_output=True, timeout=60, creationflags=subprocess.CREATE_NO_WINDOW, env=environment)  # 校验失败应在写入程序之前停止。
+        if failed.returncode == 0 or (root / 'components.json').exists() or (root / 'zzu-nscc-helper.exe').exists():  # 不允许损坏载荷变成有效安装。
+            raise ValueError('INVALID_PAYLOAD_NOT_BLOCKED')  # 明确阻止发布。
+        safety.append({'kind': 'online', 'case': 'incomplete_or_corrupt_payload_rejected_before_install', 'passed': True})  # 不将此项冒充强制断电验收。
+    report = {'schema': 1, 'status': 'component_matrix_passed', 'cases': records, 'safety_cases': safety, 'real_platform_tested': False, 'clean_windows11_tested': False, 'online_github_download_tested': False, 'abrupt_power_loss_tested': False}  # 精确声明测试边界。
     (output / 'installer-matrix.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')  # 可公开的计数和哈希。
     sums = [hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name for path in sorted(output.iterdir()) if path.is_file() and path.name != 'SHA256SUMS.txt']  # 新验收摘要也纳入发布清单。
     (output / 'SHA256SUMS.txt').write_text('\n'.join(sums) + '\n', encoding='ascii')  # 产物测试后再次固化。

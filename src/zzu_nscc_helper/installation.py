@@ -138,13 +138,15 @@ def self_test(root):  # 无平台流量的冻结程序检查。
         importlib.import_module(expected[component], 'zzu_nscc_helper')  # 不认证、不请求平台。
     app = QApplication.instance() or QApplication([])  # CI使用offscreen平台。
     window = MainWindow(selected, preview=True)  # 不注册连接器或检测生产环境。
-    pending = [task.process.state() for task in (window.detector, window.routing.task if window.routing else None, window.transfer.task if window.transfer else None) if task]  # 核对真实后台对象状态。
-    no_workers = all(state == QProcess.NotRunning for state in pending) and (not window.keepalive or window.keepalive.worker is None)  # 不以未观测的常量冒充无子进程。
-    tab_count = window.tabs.count()  # 真实构造的页面数量。
-    window.cleanup()  # 主界面关闭自身定时器和托盘。
-    window.exiting = True  # 不收起到托盘。
-    window.close()  # 不进入事件循环。
-    app.processEvents()  # 处理删除事件。
+    try:  # 即使观测失败也关闭本次GUI和日志句柄。
+        tasks = [task for task in (window.detector, window.routing.task if window.routing else None, window.transfer.task if window.transfer else None) if task]  # 只检查真实存在的控制器。
+        no_workers = all(task.process is None or task.process.state() == QProcess.NotRunning for task in tasks) and (not window.keepalive or window.keepalive.worker is None)  # 尚未启动的控制器没有QProcess，不能当作自检异常。
+        tab_count = window.tabs.count()  # 真实构造的页面数量。
+    finally:  # 异常也不能留下Windows文件句柄或托盘。
+        window.cleanup()  # 主界面关闭自身定时器和托盘。
+        window.exiting = True  # 不收起到托盘。
+        window.close()  # 不进入事件循环。
+        app.processEvents()  # 处理删除事件。
     windows = Path(os.environ['WINDIR']).resolve()  # Windows系统库允许来自系统目录。
     external = []  # 不回显外部路径。
     for module in tuple(sys.modules.values()):  # 检查实际加载的Python模块来源。

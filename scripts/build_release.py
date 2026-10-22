@@ -7,6 +7,7 @@ from pathlib import Path  # 构建产物全部限制在仓库dist内。
 import shutil  # 从已审计源码白名单复制。
 import subprocess  # 不使用shell执行工具。
 import sys  # 仅使用CI当前解释器。
+import urllib.request  # 获取固定版本的公开对应源码索引。
 import zipfile  # 生成可独立校验的组件包。
 ROOT = Path(__file__).resolve().parents[1]  # 独立发布仓库。
 SETTINGS = json.loads((ROOT / 'packaging/build-settings.json').read_text(encoding='utf-8'))  # 固定目标仓库及版本。
@@ -33,9 +34,16 @@ def payloads():  # 已完成PyInstaller构建后拆分载荷。
     licenses = core / 'licenses'  # 安装包自带第三方版权说明。
     licenses.mkdir(exist_ok=True)  # 构建目录内可重复生成。
     dependencies = []  # 按实际安装版本生成物料清单。
+    source_index = json.loads((ROOT / 'packaging/runtime-sources.json').read_text(encoding='utf-8'))  # 已独立核验的Python及Qt对应源码。
     for dist in sorted(metadata.distributions(), key=lambda item: item.metadata['Name'].casefold()):  # CI为此项目的隔离环境。
         distribution = dist.metadata['Name']  # 公开软件包名。
         dependencies.append({'name': distribution, 'version': dist.version})  # 不收录环境变量或镜像凭据。
+        if distribution.casefold().replace('_', '-') != 'pyqt5-qt5':  # Qt运行库使用官方Qt完整源码，不误认为只有包装轮子。
+            with urllib.request.urlopen('https://pypi.org/pypi/' + distribution + '/' + dist.version + '/json', timeout=30) as response:  # 官方固定发行元数据。
+                info = json.load(response)  # 不执行第三方代码。
+            sources = [{'url': entry['url'], 'sha256': entry['digests']['sha256']} for entry in info['urls'] if entry['packagetype'] == 'sdist']  # 对应版本实际源代码归档与哈希。
+            if sources:  # 没有源码归档的包装轮子由明确运行库源代码条目覆盖。
+                source_index['sources'].append({'name': distribution, 'version': dist.version, 'archives': sources})  # 不包含个人路径或认证。
         for item in dist.files or ():  # 只复制许可证和版权文件。
             if Path(item).name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE')):  # 不复制包缓存或其他项目数据。
                 source = Path(dist.locate_file(item))  # 来自已安装发行包。
@@ -45,6 +53,7 @@ def payloads():  # 已完成PyInstaller构建后拆分载荷。
                     if not target.exists():  # 不覆盖同一包已有版权文件。
                         shutil.copy2(source, target)  # 原文保留。
     (core / 'build-info.json').write_text(json.dumps({'schema': 1, 'version': SETTINGS['version'], 'dependencies': dependencies}, indent=2), encoding='utf-8')  # 可公开、无本机账号。
+    (core / 'corresponding-sources.json').write_text(json.dumps(source_index, ensure_ascii=False, indent=2), encoding='utf-8')  # 安装目录提供确切版本和源码获取位置。
     manifest = {'schema': 1, 'version': SETTINGS['version'], 'tag': SETTINGS['tag'], 'units': {}}  # 安装器的固定版本清单。
     manifest['units']['core'] = archive(core, output / 'core.zip')  # 公共运行库只打包一次。
     module_root = ROOT / 'src/zzu_nscc_helper'  # 唯一业务源码输入。

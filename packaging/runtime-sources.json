@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "sources": [
+    {
+      "name": "Python",
+      "version": "3.12.4",
+      "url": "https://www.python.org/ftp/python/3.12.4/Python-3.12.4.tar.xz",
+      "sha256": "f6d419a6d8743ab26700801b4908d26d97e8b986e14f95de31b32de2b0e79554"
+    },
+    {
+      "name": "Qt",
+      "version": "5.15.2",
+      "url": "https://download.qt.io/archive/qt/5.15/5.15.2/single/qt-everywhere-src-5.15.2.tar.xz",
+      "sha256": "3a530d1b243b5dec00bc54937455471aaa3e56849d2593edb8ded07228202240"
+    }
+  ]
+}
