@@ -117,9 +117,9 @@ function NextButtonClick(CurPageID: Integer): Boolean; { 空选择和升级时�
 begin
   Result := True;
   if CurPageID = wpSelectComponents then begin
-    if Chosen = '' then begin MsgBox('请至少选择一项功能。', mbError, MB_OK); Result := False; Exit; end;
+    if Chosen = '' then begin SuppressibleMsgBox('请至少选择一项功能。', mbError, MB_OK, IDOK); Result := False; Exit; end;
     if RemovingInstalledComponent then begin
-      MsgBox('本版升级支持添加组件。若要移除已有组件，请先卸载后重新选择；个人日志和备份会保留。', mbInformation, MB_OK);
+      SuppressibleMsgBox('本版升级支持添加组件。若要移除已有组件，请先卸载后重新选择；个人日志和备份会保留。', mbInformation, MB_OK, IDOK);
       Result := False;
     end;
   end;
@@ -140,7 +140,7 @@ var Code: Integer;
 begin
   Result := IdleAt(ExpandConstant('{app}'));
   if Result then Result := Exec(ExpandConstant('{app}\zzu-nscc-maintenance.exe'), 'unregister', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
-  if not Result then MsgBox('请退出助手；若连接注册已被其他安装修改，请先处理迁移冲突。当前未强制退出程序。', mbError, MB_OK);
+  if not Result then SuppressibleMsgBox('请退出助手；若连接注册已被其他安装修改，请先处理迁移冲突。当前未强制退出程序。', mbError, MB_OK, IDOK);
 end;
 [UninstallDelete]
 ; 仅删除安装器自己生成的组件清单，保留AppData中的日志、回执和规则备份。
