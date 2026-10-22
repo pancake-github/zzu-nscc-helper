@@ -86,10 +86,15 @@ def compile_installers(output, manifest, compiler):  # 在线和离线版来自�
 
 def main():  # 仅CI调用，不安装到开发者环境。
     parser = argparse.ArgumentParser(description=__doc__)  # 固定构建流程。
-    parser.add_argument('--iscc', type=Path, required=True)  # 已校验的Inno编译器。
+    parser.add_argument('--iscc', type=Path)  # 完整构建需要已校验的Inno编译器。
+    parser.add_argument('--native-only', action='store_true')  # 回归前仅编译同一连接程序。
     args = parser.parse_args()  # 不接收任意源码目录。
     native = ROOT / 'src/zzu_nscc_helper/keepalive/native_host.exe'  # 此文件被Git忽略。
     subprocess.run([str(Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')), '/nologo', '/target:exe', '/debug-', '/out:' + str(native), str(native.with_name('NativeHost.cs'))], check=True)  # 原生主机从本次源码编译。
+    if args.native_only:  # 源码回归不需要先安装打包工具。
+        return 0  # 使用相同的绝对Windows路径，避免旧csc误解析正斜杠。
+    if args.iscc is None:  # 不猜测本机安装的编译器。
+        parser.error('完整构建必须指定--iscc。')  # 不启动不完整的构建。
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', str(ROOT / 'packaging/helper.spec')], cwd=ROOT, check=True)  # 使用隔离CI环境。
     output, manifest = payloads()  # 不扫描开发者目录。
     compile_installers(output, manifest, args.iscc)  # 每个下载哈希嵌入安装器。

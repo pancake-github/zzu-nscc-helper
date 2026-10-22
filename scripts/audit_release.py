@@ -7,7 +7,7 @@ import re  # 二进制也检查未压缩的令牌和私钥标记。
 import sys  # 导入源码隐私审核规则。
 import zipfile  # 实际读取每个压缩成员。
 from audit_public_tree import violations  # 源码与组件采用同一凭据检查。
-BAD_BYTES = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b')  # 不输出匹配值。
+BAD_BYTES = re.compile(rb'-----BEGIN (?:ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY-----\s+[A-Za-z0-9+/=\r\n]{64,}-----END (?:ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b')  # 检查完整密钥材料，避免误判加密库内置的格式标签。
 
 def audit(folder):  # 本机和CI共用，不读取本机用户数据。
     manifest = json.loads((folder / 'payload-manifest.json').read_text(encoding='utf-8'))  # 无凭据元数据。

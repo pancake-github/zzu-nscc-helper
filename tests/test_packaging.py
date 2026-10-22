@@ -12,8 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]  # 独立仓库。
 sys.path.insert(0, str(ROOT / 'src'))  # 不安装包。
 sys.path.insert(0, str(ROOT / 'scripts'))  # 导入资产审核模块。
 from zzu_nscc_helper import installation  # 活跃安装迁移逻辑。
+from audit_release import BAD_BYTES  # 真实构建资产审核器。
 
 class InstallationTests(unittest.TestCase):  # 迁移必须可重入且不能覆盖外部修改。
+    def test_artifact_scan_distinguishes_parser_labels_from_key_material(self):  # 加密库内置格式字符串不是私人密钥。
+        opening = b'-----BEGIN ' + b'PRIVATE KEY-----'  # 拼接无效合成材料，不包含实际密钥。
+        closing = b'-----END ' + b'PRIVATE KEY-----'  # 只验证扫描边界。
+        self.assertIsNone(BAD_BYTES.search(opening))  # 单个解析标签不应阻断合法第三方库。
+        self.assertIsNotNone(BAD_BYTES.search(opening + b'\n' + b'A' * 80 + b'\n' + closing))  # 看似完整密钥的材料必须阻断。
     def test_workflow_is_valid_yaml(self):  # 防止命令参数中的冒号让云构建根本无法启动。
         workflow = yaml.load((ROOT / '.github/workflows/build.yml').read_text(encoding='utf-8'), Loader=yaml.BaseLoader)  # 只解析配置，不执行动作。
         self.assertIn('push', workflow['on'])  # 推送能触发候选构建。

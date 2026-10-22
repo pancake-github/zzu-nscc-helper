@@ -34,7 +34,7 @@ jobs:
       - name: Run offline regression
         shell: pwsh
         run: |
-          & 'C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe' /nologo /target:exe /debug- /out:src/zzu_nscc_helper/keepalive/native_host.exe src/zzu_nscc_helper/keepalive/NativeHost.cs
+          python -B scripts/build_release.py --native-only
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -B -m unittest discover -s tests -p 'test_*.py'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
