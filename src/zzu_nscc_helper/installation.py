@@ -8,6 +8,7 @@ import json  # 安装清单和私有迁移记录。
 import os  # 原子替换维护文件。
 from pathlib import Path  # 所有程序路径来自实际安装目录。
 import sys  # 冻结程序的实际位置。
+import uuid  # Windows签名校验动作的固定GUID。
 import winreg  # 仅操作当前用户本产品的注册键。
 from .components import COMPONENTS, normalize_selection  # 安装器与运行时使用相同选择契约。
 from .instance import InstanceGuard  # 安装和升级不得抢占运行中的助手。
@@ -128,6 +129,30 @@ def unregister(root):  # 卸载只撤销仍属于当前安装的注册。
     backup.unlink()  # 成功恢复后才移除本次迁移记录。
     return {'ok': True, 'native_changed': True}  # 用户日志与规则备份继续保留。
 
+def trusted_signature_offline(path):  # 仅用本机证书缓存核验已注入DLL，不修改信任库或联网。
+    class FileInfo(ctypes.Structure):  # WINTRUST_FILE_INFO的原生布局。
+        _fields_ = [('size', wintypes.DWORD), ('path', wintypes.LPCWSTR), ('handle', wintypes.HANDLE), ('subject', ctypes.c_void_p)]  # 文件对象不加载执行。
+    class TrustData(ctypes.Structure):  # WINTRUST_DATA的文件联合成员用等宽指针表示。
+        _fields_ = [('size', wintypes.DWORD), ('policy', ctypes.c_void_p), ('sip', ctypes.c_void_p), ('ui', wintypes.DWORD), ('revocation', wintypes.DWORD), ('choice', wintypes.DWORD), ('file', ctypes.POINTER(FileInfo)), ('action', wintypes.DWORD), ('state', wintypes.HANDLE), ('url', wintypes.LPWSTR), ('flags', wintypes.DWORD), ('context', wintypes.DWORD), ('signature', ctypes.c_void_p)]  # 对齐由ctypes按Windows ABI处理。
+    item = FileInfo(ctypes.sizeof(FileInfo), str(path), None, None)  # 仅核验已观测到的实际文件。
+    data = TrustData()  # 所有保留字段初始化为零。
+    data.size, data.ui, data.choice, data.action = ctypes.sizeof(TrustData), 2, 1, 1  # 无界面、文件对象、建立后必须释放校验状态。
+    data.file, data.flags = ctypes.pointer(item), 0x1000 | 0x80 | 0x2000  # 仅缓存撤销检查、除根外证书链检查、拒绝MD2/MD4。
+    action = (ctypes.c_ubyte * 16).from_buffer_copy(uuid.UUID('00aac56b-cd44-11d0-8cc2-00c04fc295ee').bytes_le)  # WINTRUST_ACTION_GENERIC_VERIFY_V2。
+    verify = ctypes.WinDLL('wintrust', use_last_error=True).WinVerifyTrust  # 系统签名接口，不启动PowerShell。
+    verify.argtypes, verify.restype = [wintypes.HWND, ctypes.c_void_p, ctypes.POINTER(TrustData)], wintypes.LONG  # LONG为有符号错误码，仅零表示成功。
+    try:  # 无论校验结果如何都释放系统状态。
+        return verify(wintypes.HWND(-1), ctypes.byref(action), ctypes.byref(data)) == 0  # 缓存不足或未知签名不放行。
+    finally:  # Windows要求每次VERIFY对应CLOSE。
+        data.action = 2  # WTD_STATEACTION_CLOSE。
+        verify(wintypes.HWND(-1), ctypes.byref(action), ctypes.byref(data))  # 不修改被测DLL。
+
+def classify_external_library(path, packaged_names):  # 区分借用运行库与系统中其他软件的已签名注入。
+    name = path.name.lower()  # Windows文件名忽略大小写。
+    if name in packaged_names or name.endswith('.pyd') or name.startswith(('python', 'qt5', 'qt6', 'pyside', 'pyqt', 'vcruntime', 'msvcp')):  # 即使有签名也不允许借用外部Python、Qt或同名打包库。
+        return 'borrowed_runtime'  # 仍是自检失败。
+    return 'signed_external' if trusted_signature_offline(path) else 'untrusted_external'  # 不因声卡或辅助软件注入误报Python依赖，也不盲目信任未知DLL。
+
 def self_test(root):  # 无平台流量的冻结程序检查。
     from .gui import installed_components, MainWindow  # 使用实际安装清单和主界面。
     from PyQt5.QtWidgets import QApplication  # 在本进程离线创建控件。
@@ -162,16 +187,18 @@ def self_test(root):  # 无平台流量的冻结程序检查。
     handles, needed = (wintypes.HMODULE * 2048)(), wintypes.DWORD()  # 有界模块缓冲。
     if not kernel.K32EnumProcessModules(kernel.GetCurrentProcess(), handles, ctypes.sizeof(handles), ctypes.byref(needed)) or needed.value > ctypes.sizeof(handles):  # 枚举失败不能宣称无外部依赖。
         raise ValueError('MODULE_ENUMERATION_FAILED')  # 明确失败。
-    external_dlls = []  # 只保留文件名，不公开用户路径。
+    external_dlls, signed_injections = [], []  # 未知或借用库失败，其他已签名注入单独如实记录。
+    packaged_names = {path.name.lower() for path in root.rglob('*') if path.is_file() and path.suffix.lower() in ('.dll', '.pyd')}  # 同名运行库必须从本安装加载。
     for index in range(needed.value // ctypes.sizeof(wintypes.HMODULE)):  # 只检查实际返回的句柄。
         buffer = ctypes.create_unicode_buffer(32768)  # 支持长路径。
         if not kernel.GetModuleFileNameW(handles[index], buffer, len(buffer)):  # 缺少任一来源证据都失败。
             raise ValueError('MODULE_PATH_UNAVAILABLE')  # 不以部分检查宣称全部通过。
         path = Path(buffer.value).resolve()  # 实际DLL或EXE路径。
         if not path.is_relative_to(root) and not path.is_relative_to(windows):  # 不允许借用外部Python或Qt运行库。
-            external_dlls.append(path.name)  # 公开摘要不含用户名。
+            destination = signed_injections if classify_external_library(path, packaged_names) == 'signed_external' else external_dlls  # 签名验证只用本机缓存，不请求网络。
+            destination.append(path.name)  # 公开摘要不含用户名或外部目录。
     passed = bool(getattr(sys, 'frozen', False)) and not external and not external_dlls and no_workers and tab_count == len(selected)  # 综合真实观测结果。
-    return {'ok': passed, 'frozen': bool(getattr(sys, 'frozen', False)), 'components': list(selected), 'tabs': tab_count, 'external_python_modules': external, 'external_native_libraries': external_dlls, 'network_requests': 0, 'workers_running': not no_workers}  # 不声称完整真实联网验收。
+    return {'ok': passed, 'frozen': bool(getattr(sys, 'frozen', False)), 'components': list(selected), 'tabs': tab_count, 'external_python_modules': external, 'external_native_libraries': external_dlls, 'signed_external_injections': signed_injections, 'network_requests': 0, 'workers_running': not no_workers}  # 不声称完整真实联网验收。
 
 def main():  # 只能由固定维护EXE进入。
     parser = argparse.ArgumentParser(description=__doc__)  # 不接受任意路径、主机或凭据。

@@ -82,7 +82,7 @@ class TabWindow(MainWindow):  # 替换窗口选择为真实标签页选择。
     def update_mode_ui(self, unused=None):  # 模拟和真实模式不能混淆。
         live = self.mode.currentData() == 'live'  # 当前启动模式。
         self.start_button.setText('绑定并开始保活' if live else '绑定并开始（离线测试）')  # 一眼区分是否产生流量。
-        self.banner.setText('真实内网传输：首次成功后，每13分钟交互一次。\nTLS 与 VPN 路由检查已启用；融合版仍待打包与真实验收。' if live else '离线测试模式：不发送保活流量。\n要保持 VPN 在线，请在帮助菜单切回“真实 HTTPS 保活”。')  # 不把模拟包装成可用保活。
+        self.banner.setText('真实内网传输：首次成功后，每13分钟交互一次。\nTLS 与 VPN 路由检查已启用；测试版适用环境请核对发布页验收记录。' if live else '离线测试模式：不发送保活流量。\n要保持 VPN 在线，请在帮助菜单切回“真实 HTTPS 保活”。')  # 不把模拟包装成可用保活。
 
     def choose_scenario(self, index):  # 停止状态下才允许调整离线场景。
         if not (self.engine.active or self.awaiting or self.recovering):  # 运行中不更换请求行为。
@@ -138,7 +138,7 @@ class TabWindow(MainWindow):  # 替换窗口选择为真实标签页选择。
         if not isinstance(target, dict):  # 未连接或没有标签。
             self.selection.setText('标签页列表尚未取得。连接建立后，这里将逐项显示“标题＋网址”。')  # 不反复误报未安装。
             return  # 避免混淆。
-        phase = '正在恢复，计时已暂停' if self.recovering else '正在验证目标页面' if self.awaiting else '已绑定，正在监测标签关闭' if self.engine.active else '已选中，点击下方按钮即可绑定并开始'  # 不再显示多余的确认阶段。
+        phase = '正在恢复，计时已暂停' if self.recovering else '正在验证目标页面' if self.awaiting else '已绑定，正在监测标签关闭' if self.engine.active else '已选中，点击下方按钮即可绑定并开始' if target.get('eligible') else '仅供查看，不能绑定保活'  # 不把非平台页面描述成可以开始。
         self.selection.setText(f"标签状态：{phase}\n标题：{target.get('title', '')}\n网址：{target.get('url', '')}\n标签编号：{target.get('id')}　窗口编号：{target.get('windowId')}\n{'关闭后尝试重开一次；页面恢复后重新交互计时。' if target.get('eligible') else '此页面仅可查看和定位，不属于已知超算保活目标。'}")  # 不显示混合窗口标题。
 
     def target_alive(self, target):  # 标签级身份检查。

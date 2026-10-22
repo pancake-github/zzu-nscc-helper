@@ -16,6 +16,14 @@ from audit_release import BAD_BYTES  # 真实构建资产审核器。
 from zzu_nscc_helper.keepalive.acceptance import continuous_passes  # 持续验收判定不会发起请求。
 
 class InstallationTests(unittest.TestCase):  # 迁移必须可重入且不能覆盖外部修改。
+    def test_signed_injection_cannot_disguise_borrowed_runtime(self):  # 外部签名不能绕过Python或Qt来源检查。
+        with patch.object(installation, 'trusted_signature_offline', return_value=True) as signature:  # 不改变系统信任或联网。
+            for name in ('python312.dll', 'Qt5Core.dll', 'foreign.pyd', 'libcrypto-3-x64.dll'):  # 同名依赖以及解释器均需拒绝。
+                self.assertEqual(installation.classify_external_library(Path(name), {'libcrypto-3-x64.dll'}), 'borrowed_runtime')  # 即使签名可信也不能借用。
+            signature.assert_not_called()  # 借用检查优先于签名。
+            self.assertEqual(installation.classify_external_library(Path('AudioDevProps2.dll'), set()), 'signed_external')  # 普通签名注入单独记录。
+        with patch.object(installation, 'trusted_signature_offline', return_value=False):  # 缓存不足或无签名都不能猜测。
+            self.assertEqual(installation.classify_external_library(Path('other.dll'), set()), 'untrusted_external')  # 未知DLL保持失败。
     def test_continuous_acceptance_requires_all_evidence(self):  # 不能把不足45分钟或有采样缺口的测试算通过。
         receipts = [{'offset_seconds': offset, 'status': 200, 'tls_verified': True, 'bytes': 100} for offset in (0, 781, 1562, 2343)]  # 合成协议摘要，不访问平台。
         self.assertTrue(continuous_passes(receipts, 2700, 1.1, [], []))  # 全部门槛满足。
