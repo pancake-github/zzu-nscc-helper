@@ -1,6 +1,6 @@
 # 融合源码使用与数据边界
 
-当前为0.5候选验收版，候选安装器已完成本机 Windows 11 的安装、升级和卸载入口核查。首版目标为Windows 11 x64；本项目只适用于平台预设中定义的郑州超算SSL VPN环境。额外干净 Windows 11 虚拟机验收按用户要求跳过，未记为通过；不要把未完成的真实功能验收误解为正式 Release 已通过。
+当前已提供 `v0.5.0-beta.1` 公开测试版，安装器已完成本机 Windows 11 的安装、升级和卸载入口核查；使用安装器不需要 Python。本文说明需要开发环境的源码运行方式，下载入口见[README](../README.md)。首版目标为Windows 11 x64；本项目只适用于平台预设中定义的郑州超算SSL VPN环境。额外干净 Windows 11 虚拟机验收按维护者要求跳过，未记为通过；剩余真实功能验收作为测试版已知限制保留。
 
 ## 入口与组件
 
@@ -12,7 +12,7 @@ python launcher.py --components sftp # 只打开SFTP组件，正常启动会进�
 python launcher.py --components keepalive,routing,sftp # 打开全部组件，任务均需用户手动开始。
 ```
 
-`keepalive`、`routing`、`sftp`可任意非空组合；未知名称和空选择会被拒绝。后续安装版使用安装器生成的版本化组件清单，并使用独立工作EXE，不寻找开发者机器上的Python路径。当前源码运行仍需要开发环境，尚不能宣称无需Python的一键安装已经完成。
+`keepalive`、`routing`、`sftp`可任意非空组合；未知名称和空选择会被拒绝。安装版使用安装器生成的版本化组件清单，并使用独立工作EXE，不寻找开发者机器上的Python路径。源码运行仍需要开发环境；安装版携带自己的运行库，两种入口的环境要求不同。
 
 保活组件的Native Host需要在Windows上使用已有C#编译器将`src/zzu_nscc_helper/keepalive/NativeHost.cs`编译为同目录的`native_host.exe`。该产物被Git忽略，后续由Windows构建流程生成。源码不携带个人机器的Native Messaging清单。
 
@@ -34,10 +34,10 @@ python launcher.py --components keepalive,routing,sftp # 打开全部组件，�
 
 受管增强脚本包含完整性摘要；手动修改后会报告冲突，不会静默丢弃改动再套一层脚本。损坏备份或未完成事务会阻止继续应用或回滚，保留本机材料供核对。生效检查还通过本机控制器的只读`/configs`、`/rules`检查核心实际状态，不依赖固定HTTP端口；这些查询不会访问超算，不会调用核心的写入API。
 
-旧独立助手仍在运行时，统一版会提示先停止并退出旧版，以免两套任务争用浏览器连接。已有原生组件指向其他安装时不会自动覆盖；正式迁移流程留待安装器阶段验证。新旧安装均未验证前，不删除旧版或其数据。
+旧独立助手仍在运行时，统一版会提示先停止并退出旧版，以免两套任务争用浏览器连接。已有原生组件指向其他安装时不会直接覆盖；本批安装器的迁移、原注册备份保留和安装后连接检查已经在本机核对。迁移后需确认 Edge 连接的是新安装的组件，不删除旧版或其数据。
 
 ## 当前验证边界
 
-本阶段完成源码融合、候选安装器本机核查及一次专用标签页真实保活测试。该测试运行 1456.547 秒，完成两次 HTTP 200、TLS 校验通过的 HTTPS 交互，异常路由采样为 0，因专用标签页导航而停止；按当前人工口径满足超过 15 分钟标准，但不记为正式 45 分钟通过。没有使用真实 SSH 密码，没有修改正在使用的Clash配置，也没有关闭业务浏览器标签。实际Clash应用/回滚、真实SFTP传输、专用标签恢复与失败终止及正式 Release 下载复核，仍属于后续验收。
+本阶段完成源码融合、安装器本机核查及一次专用标签页真实保活测试。该测试运行 1456.547 秒，完成两次 HTTP 200、TLS 校验通过的 HTTPS 交互，异常路由采样为 0，因专用标签页导航而停止；按维护者接受的超过 15 分钟标准结束，不记为完整 45 分钟通过。没有使用真实 SSH 密码，也没有关闭业务浏览器标签。首次真实 Clash 应用失败后已恢复文件，修正版完整应用/回滚仍待实测；真实SFTP传输、专用标签恢复与失败终止也未记为通过。维护者已接受上述限制并授权先发布测试版，后续结果继续按实际证据追加。
 
 上游依据：Clash 2.5.8的数据目录解析见[官方固定版本源码](https://github.com/clash-verge-rev/clash-verge-rev/blob/v2.5.8/src-tauri/src/utils/dirs.rs)；增强脚本入口见[官方扩展配置说明](https://www.clashverge.dev/guide/extend.html)；正常退出采用[Windows Restart Manager](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/nf-restartmanager-rmshutdown)且不使用强制关闭标志。本机核心查询字段依据[Mihomo官方API说明](https://github.com/MetaCubeX/Meta-Docs/blob/main/docs/api/index.md)和[实际规则返回实现](https://github.com/MetaCubeX/mihomo/blob/Meta/hub/route/rules.go)核对。

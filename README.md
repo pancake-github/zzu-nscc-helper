@@ -1,6 +1,6 @@
 # 郑州超算助手 · ZZU NSCC Helper
 
-**开发验收中：候选安装器已生成，尚未发布正式 Release。** 在线、离线安装器和按需组件选择已经完成候选包验收；正式下载入口仍等待剩余真实功能验收。当前构建与安装边界见[安装说明](docs/INSTALLATION.md)。
+**已发布首个公开测试版 `v0.5.0-beta.1`。** [下载页面与已知限制](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.1) · [在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/zzu-nscc-helper-online-0.5.0-beta.1-x64.exe) · [完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/zzu-nscc-helper-offline-0.5.0-beta.1-x64.exe)。本版为预发布测试版，实测范围见[安装说明](docs/INSTALLATION.md)。
 
 **仅适用于本项目说明的郑州超算平台 SSL VPN 接入环境。非官方项目，不适用于其他超算中心。**
 
@@ -10,13 +10,13 @@
 
 ## 当前实际状态
 
-当前为 **0.5.0b1 候选构建，尚未正式发布**。统一中文界面、独立后台进程、真实保活入口、SFTP上传下载界面，以及Clash检测、预览、事务应用和回滚均已接入。
+当前为 **0.5.0-beta.1 公开测试版**。统一中文界面、独立后台进程、真实保活入口、SFTP上传下载界面，以及Clash检测、预览、事务应用和回滚均已接入。尚未完成的实机项目在下文和发布说明中保留，不标为稳定版。
 
-**候选安装器已在本机 Windows 11 完成安装、升级、组件迁移和卸载入口核查；额外干净 Windows 11 虚拟机验收按用户要求跳过，未记为通过。** Windows 云构建已通过在线、离线各七种组件组合及添加组件、保留本机资料、坏载荷拒绝检查。当前构建为 `39913823258`，源码提交为 `06e75f9f463fec896838aec8f3bac8d0aa34ca16`；正式 Release 下载尚未复核。`baseline/`保留历史来源，源码统一入口为`launcher.py`。
+**本批安装器已在本机 Windows 11 完成安装、升级、组件迁移和卸载入口核查；额外干净 Windows 11 虚拟机验收按维护者要求跳过，未记为通过。** Windows 云构建已通过在线、离线各七种组件组合及添加组件、保留本机资料、坏载荷拒绝检查。发布沿用已实测构建 `39913823258` 的同一批字节，源码与标签固定到 `06e75f9f463fec896838aec8f3bac8d0aa34ca16`；后续文档提交不替换安装包。`baseline/`保留历史来源，源码统一入口为`launcher.py`。
 
 三组件源码融合和第三阶段离线/本机模拟服务回归已完成，覆盖独立组件、Clash端口及管道、自适应VPN身份、配置冲突、失败恢复、SFTP主机密钥变化和取消清理。正式联网、安装及升级结果以[阶段验收记录](docs/STAGES.md)为准。
 
-候选安装包已完成一次专用标签页真实保活运行 1456.547 秒（约 24.3 分钟），在约第 0、13 分钟各成功一次 HTTPS 交互，HTTP 200、TLS 校验通过、异常路由采样为 0、工作进程已清理；测试因专用标签页导航而停止。按本项目当前人工验收口径，该结果满足“超过 15 分钟”的可接受运行标准，但不记为正式 45 分钟通过。Clash 实际应用/回滚、专用标签恢复与失败终止、真实 SFTP 及正式 Release 下载复核仍待完成，详细边界见[开发与验收阶段](docs/STAGES.md)。
+本批安装包已完成一次专用标签页真实保活运行 1456.547 秒（约 24.3 分钟），在约第 0、13 分钟各成功一次 HTTPS 交互，HTTP 200、TLS 校验通过、异常路由采样为 0、工作进程已清理；测试因专用标签页导航而停止。按维护者接受的超过 15 分钟标准通过本轮保活检查，无需重跑 45 分钟，也不改写为完整 45 分钟通过。Clash 修正后的实际应用/回滚、专用标签恢复与失败终止、真实 SFTP 仍待独立实测；维护者已接受这些限制并授权先发布测试版，详细边界见[开发与验收阶段](docs/STAGES.md)。
 
 ## 适用条件
 
@@ -25,7 +25,9 @@
 - 平台固定服务地址与身份见[平台说明](docs/PLATFORM.md)，其他环境不自动套用。
 - 保活不代表网页SSO登录永不过期；不自动登录VPN，不读取浏览器密码或Cookie。
 
-## 按需安装设计
+## 下载与按需安装
+
+安装后无需自行安装 Python。选择[在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/zzu-nscc-helper-online-0.5.0-beta.1-x64.exe)按需下载，或使用[完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/zzu-nscc-helper-offline-0.5.0-beta.1-x64.exe)。请对照 [SHA256SUMS.txt](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/SHA256SUMS.txt) 校验文件。安装器尚无 Authenticode 数字签名，Windows 可能显示发布者未知提示。
 
 | 可选组件 | 对应功能 | Edge扩展 |
 | --- | --- | --- |
@@ -35,7 +37,7 @@
 | 全部安装 | 三项功能 | 仅保活使用 |
 | 自定义 | 任意非空组合 | 按选项决定 |
 
-在线安装器只下载公共运行库和已选组件；离线安装包保留同样的组件选择。每个下载资产都要通过SHA-256校验。安装器和下载入口将在后续阶段实际验证后发布。
+在线安装器只下载公共运行库和已选组件；离线安装包保留同样的组件选择。每个下载资产都要通过SHA-256校验。Release 中的 `core.zip` 等四个载荷由在线安装器使用，通常无需手动下载。[Edge 扩展包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/zzu-nscc-helper-edge-0.5.0-beta.1.zip)亦单独提供；保活首次使用仍需手动加载一次，步骤见[安装说明](docs/INSTALLATION.md)。
 
 ## 现有源码与检查
 
