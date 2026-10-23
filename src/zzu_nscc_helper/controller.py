@@ -1,8 +1,13 @@
 """只读查询本机Mihomo核心；HTTP仅限回环地址，命名管道仅限本机。"""  # 不返回认证头或原始错误。
 import http.client  # 标准库HTTP，无系统代理与自动重试。
+import ctypes as C  # 只读查询当前用户身份，不安装额外依赖。
+from ctypes import wintypes as W  # Windows令牌和句柄的固定宽度。
+import hashlib  # 按官方协议计算当前用户的管道作用域。
 import io  # 有界命名管道响应解析。
 import ipaddress  # 不通过DNS把控制器请求发到外部。
 import json  # 核心API的只读JSON结果。
+import os  # 仅枚举已经存在的本机管道，不创建监听。
+import re  # 严格识别已确认版本的管道格式。
 import time  # 整次本机管道交互的截止。
 from urllib.parse import urlsplit  # 严格解析控制器地址。
 from PyQt5.QtCore import QCoreApplication  # 工作进程没有GUI时支持本机管道。
@@ -13,6 +18,51 @@ APPLICATION = None  # 后台进程共用一个Qt核心应用。
 
 class ControllerError(Exception):  # 所有外部失败转换为固定类别。
     pass  # 不附secret或API响应。
+
+def current_owner_key():  # Clash Verge服务协议以当前用户SID的SHA256隔离管道。
+    kernel, security = C.WinDLL('kernel32', use_last_error=True), C.WinDLL('advapi32', use_last_error=True)  # 只使用Windows系统库。
+    kernel.GetCurrentProcess.restype = W.HANDLE  # 保留六十四位伪句柄。
+    kernel.CloseHandle.argtypes = [W.HANDLE]  # 只关闭本函数打开的令牌。
+    kernel.LocalFree.argtypes = [C.c_void_p]  # 释放系统分配的SID字符串。
+    security.OpenProcessToken.argtypes = [W.HANDLE, W.DWORD, C.POINTER(W.HANDLE)]  # 仅请求TOKEN_QUERY。
+    security.GetTokenInformation.argtypes = [W.HANDLE, C.c_int, C.c_void_p, W.DWORD, C.POINTER(W.DWORD)]  # 查询TokenUser。
+    security.ConvertSidToStringSidW.argtypes = [C.c_void_p, C.POINTER(W.LPWSTR)]  # 不查询账户名称。
+    token, size = W.HANDLE(), W.DWORD()  # 初始化输出。
+    if not security.OpenProcessToken(kernel.GetCurrentProcess(), 8, C.byref(token)):  # 无权限时不猜测用户。
+        raise ControllerError('CONTROLLER_OWNER_UNAVAILABLE')  # 不请求提权或读取其他用户令牌。
+    try:  # 始终回收令牌句柄。
+        security.GetTokenInformation(token, 1, None, 0, C.byref(size))  # 只询问所需长度。
+        if size.value < C.sizeof(C.c_void_p) or size.value > 65536:  # 拒绝异常尺寸。
+            raise ControllerError('CONTROLLER_OWNER_UNAVAILABLE')  # 不继续读取。
+        buffer = C.create_string_buffer(size.value)  # 仅保存当前用户SID结构。
+        if not security.GetTokenInformation(token, 1, buffer, size, C.byref(size)):  # 获取实际TokenUser。
+            raise ControllerError('CONTROLLER_OWNER_UNAVAILABLE')  # 不猜测默认账号。
+        sid, text = C.c_void_p.from_buffer(buffer).value, W.LPWSTR()  # TOKEN_USER首字段是SID指针。
+        if not security.ConvertSidToStringSidW(sid, C.byref(text)):  # 转成官方协议使用的SID字符串。
+            raise ControllerError('CONTROLLER_OWNER_UNAVAILABLE')  # 不返回原始身份。
+        try:  # 原SID不写日志、配置或IPC。
+            return hashlib.sha256(text.value.encode('ascii')).hexdigest()  # 与官方owner_key实现一致。
+        finally:  # 系统分配内存必须归还。
+            kernel.LocalFree(C.cast(text, C.c_void_p))  # 不泄漏SID字符串。
+    finally:  # 所有失败路径都释放查询句柄。
+        kernel.CloseHandle(token)  # 不修改令牌权限。
+
+def pipe_endpoint(endpoint):  # 区分配置文件中的Sidecar地址与实际服务核心管道。
+    if not isinstance(endpoint, str) or not endpoint.startswith('\\\\.\\pipe\\') or any(char in endpoint for char in '\r\n'):  # 拒绝远端UNC和头注入。
+        raise ControllerError('CONTROLLER_NOT_LOCAL')  # 不向其他计算机发送认证。
+    prefix = '\\\\.\\pipe\\verge-mihomo-'  # 已确认Clash Verge 2.5.8的官方命名空间。
+    match = re.fullmatch(re.escape(prefix) + r'(sidecar-release|production)-([0-9a-f]{64})', endpoint)  # 不猜测任意应用管道。
+    if not match:  # 旧版或明确配置的自定义本机管道保留原行为。
+        return endpoint  # 不扫描替代地址，不改端口。
+    owner = current_owner_key()  # 只使用本批执行用户的身份。
+    if match.group(2) != owner:  # 不复用另一Windows用户的控制器。
+        raise ControllerError('CONTROLLER_OWNER_MISMATCH')  # 认证前停止。
+    existing = set(os.listdir('\\\\.\\pipe\\'))  # 只查询本机现有管道名称。
+    candidates = [prefix + flavor + '-' + owner for flavor in ('sidecar-release', 'production')]  # 两个地址均来自官方协议和同一用户身份。
+    available = [value for value in candidates if value.rsplit('\\', 1)[-1] in existing]  # 不主动连接不存在的候选。
+    if len(available) != 1:  # 双核心或切换中的状态不能猜测。
+        raise ControllerError('CONTROLLER_AMBIGUOUS' if available else 'CONTROLLER_UNAVAILABLE')  # 等用户重新检测或事务有界等待。
+    return available[0]  # 只读查询实际存在且属于当前用户的唯一控制器。
 
 def address(endpoint):  # 返回实际回环IP和端口，不接受外部主机。
     value = urlsplit('http://' + str(endpoint))  # Mihomo字段应为host:port。
@@ -94,7 +144,7 @@ def query(runtime, route):  # 不提供任意API调用能力。
     try:  # 第三方库和系统错误均不能带出认证信息。
         request_headers = headers(runtime)  # 临时认证头。
         if runtime.get('external-controller-pipe'):  # Windows实际运行配置可只启用管道。
-            return exchange(runtime['external-controller-pipe'], route, request_headers)  # 不要求HTTP端口。
+            return exchange(pipe_endpoint(runtime['external-controller-pipe']), route, request_headers)  # 按当前用户和实际存在的服务或Sidecar管道访问，不改Clash配置。
         host, port = address(runtime.get('external-controller') or '')  # 严格本机地址。
         return exchange((host, port), route, request_headers, pipe=False)  # TCP与管道共用严格总截止和有界解析。
     except Exception:  # 任何原始异常可能带本机路径或头内容。

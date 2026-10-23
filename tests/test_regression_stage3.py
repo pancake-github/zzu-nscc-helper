@@ -419,6 +419,49 @@ class CoreTransportTests(unittest.TestCase):  # 验证本机HTTP和Windows管道
         from PyQt5.QtWidgets import QApplication  # 使用已有Qt依赖。
         cls.app = QApplication.instance() or QApplication([])  # 不能先创建仅QCoreApplication影响GUI测试。
 
+    def test_service_pipe_selected_when_generated_config_names_absent_sidecar(self):  # 覆盖真实现场的备用管道与服务核心不同问题。
+        owner = 'a' * 64  # 不使用本机SID或个人哈希。
+        sidecar = '\\\\.\\pipe\\verge-mihomo-sidecar-release-' + owner  # 合成已知版本运行文件字段。
+        service = '\\\\.\\pipe\\verge-mihomo-production-' + owner  # 同一合成用户的实际服务核心。
+        with patch.object(controller, 'current_owner_key', return_value=owner), patch.object(controller.os, 'listdir', return_value=[service.rsplit('\\', 1)[-1]]), patch.object(controller, 'exchange', return_value={'mode': 'rule'}) as exchange:  # 不访问真实管道。
+            result = controller.query({'external-controller-pipe': sidecar}, '/configs')  # 不改原配置也能查询服务核心。
+            self.assertEqual(result, {'mode': 'rule'})  # 成功结果仍由生产解析器协议返回。
+            self.assertEqual(exchange.call_args.args[:2], (service, '/configs'))  # 认证不会发往配置里不存在的备用管道。
+
+    def test_sidecar_pipe_selected_when_service_not_running(self):  # 普通Sidecar模式无需服务或固定端口。
+        owner = 'b' * 64  # 合成Windows用户作用域。
+        sidecar = '\\\\.\\pipe\\verge-mihomo-sidecar-release-' + owner  # 运行中的单一Sidecar。
+        service = '\\\\.\\pipe\\verge-mihomo-production-' + owner  # 模拟残留服务配置字段。
+        with patch.object(controller, 'current_owner_key', return_value=owner), patch.object(controller.os, 'listdir', return_value=[sidecar.rsplit('\\', 1)[-1]]):  # 不枚举实际系统。
+            self.assertEqual(controller.pipe_endpoint(service), sidecar)  # 以实际存在的同用户唯一核心为准。
+
+    def test_dual_or_absent_cores_do_not_send_controller_auth(self):  # 核心切换或无核心时拒绝猜测。
+        owner = 'c' * 64  # 不使用任何真实用户信息。
+        sidecar = '\\\\.\\pipe\\verge-mihomo-sidecar-release-' + owner  # 合成主配置。
+        names = ['verge-mihomo-sidecar-release-' + owner, 'verge-mihomo-production-' + owner]  # 同用户双核心候选。
+        for available in ([], names):  # 缺失和歧义都应安全失败。
+            with self.subTest(count=len(available)), patch.object(controller, 'current_owner_key', return_value=owner), patch.object(controller.os, 'listdir', return_value=available), patch.object(controller, 'exchange') as exchange:  # 没有真实核心通信。
+                with self.assertRaises(controller.ControllerError):  # 不退回默认HTTP端口。
+                    controller.query({'external-controller-pipe': sidecar}, '/rules')  # 只读API也必须先核对目标。
+                exchange.assert_not_called()  # 不向不确定目标发送认证。
+
+    def test_other_windows_owner_is_rejected_before_pipe_enumeration(self):  # 不能复用另一用户的本机控制器。
+        endpoint = '\\\\.\\pipe\\verge-mihomo-production-' + 'd' * 64  # 合成其他用户字段。
+        with patch.object(controller, 'current_owner_key', return_value='e' * 64), patch.object(controller.os, 'listdir') as inventory, patch.object(controller, 'exchange') as exchange:  # 完全离线。
+            with self.assertRaises(controller.ControllerError):  # 当前用户身份不匹配即拒绝。
+                controller.query({'external-controller-pipe': endpoint}, '/configs')  # 不尝试认证。
+            inventory.assert_not_called()  # 不搜索其他用户的管道。
+            exchange.assert_not_called()  # 不传输凭据。
+
+    def test_custom_local_pipe_remains_exact_and_remote_pipe_is_rejected(self):  # 保留旧版自定义本机入口，不扩展到网络。
+        local = r'\\.\pipe\offline-exact-controller'  # 合成未知命名空间。
+        with patch.object(controller, 'current_owner_key') as owner, patch.object(controller.os, 'listdir') as inventory:  # 不读取真实身份或系统。
+            self.assertEqual(controller.pipe_endpoint(local), local)  # 不替换用户明确给出的本机地址。
+            owner.assert_not_called()  # 通用管道不需要Clash用户哈希。
+            inventory.assert_not_called()  # 不扫描其他候选。
+        with self.assertRaises(controller.ControllerError):  # 不向远程UNC发送认证。
+            controller.pipe_endpoint(r'\\remote.invalid\pipe\offline')  # 不建立任何连接。
+
     def test_only_loopback_addresses_and_read_only_paths(self):  # 认证头不能发往外部网络。
         for value in ('192.0.2.8:19001', 'example.invalid:19001', '127.0.0.1:19001/configs'):  # 非本机或非入口格式。
             with self.assertRaises((controller.ControllerError, ValueError)):  # 在连接之前拒绝。

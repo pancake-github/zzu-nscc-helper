@@ -14,7 +14,7 @@ from .paths import data_root  # 含订阅的备份只能留在用户数据目录
 from .platform import load_platform  # 固定公共平台目标。
 from .network import detect_vpn, route_matches  # 稳定接口身份。
 from .lifecycle import clients, ClashLifecycle  # 正常退出和重启。
-from .controller import query as query_core, ControllerError  # 生效检查读取核心实际状态。
+from .controller import query as query_core, pipe_endpoint, ControllerError  # 生效检查读取核心实际状态，并识别服务管道。
 
 OWNED = ('verge.yaml', 'profiles/Script.js')  # 只允许写这两个文件。
 BEGIN, END = '// ZZU-ORIGINAL-BEGIN\n', '// ZZU-ORIGINAL-END\n'  # 无损保留原增强脚本。
@@ -52,7 +52,7 @@ def document(content):  # YAML必须是普通映射。
 def controller(runtime):  # 使用实际运行配置，兼容命名管道和HTTP。
     pipe = runtime.get('external-controller-pipe')  # Windows管道不会被错误当作HTTP端口。
     http = runtime.get('external-controller')  # 空字符串不等于启用了HTTP。
-    return {'kind': 'pipe' if pipe else 'http' if http else 'disabled', 'endpoint': str(pipe or http or ''), 'secret_present': bool(runtime.get('secret'))}  # 永远不返回secret的值。
+    return {'kind': 'pipe' if pipe else 'http' if http else 'disabled', 'endpoint': pipe_endpoint(pipe) if pipe else str(http or ''), 'secret_present': bool(runtime.get('secret'))}  # 显示实际存在的当前用户控制器；永远不返回secret的值。
 
 def rule_specs():  # 仅平台具体域名和具体IP直连。
     profile = load_platform()  # 经过范围验证的公共预设。
