@@ -1,6 +1,6 @@
 # 融合源码使用与数据边界
 
-当前为0.5开发验收版，尚无已验证安装器。首版目标为Windows 11 x64；本项目只适用于平台预设中定义的郑州超算SSL VPN环境。不要把源码开发版的测试结果当作安装包已经通过真实联网验收。
+当前为0.5候选验收版，候选安装器已完成本机 Windows 11 的安装、升级和卸载入口核查。首版目标为Windows 11 x64；本项目只适用于平台预设中定义的郑州超算SSL VPN环境。额外干净 Windows 11 虚拟机验收按用户要求跳过，未记为通过；不要把未完成的真实功能验收误解为正式 Release 已通过。
 
 ## 入口与组件
 
@@ -38,6 +38,6 @@ python launcher.py --components keepalive,routing,sftp # 打开全部组件，�
 
 ## 当前验证边界
 
-本阶段完成源码融合及离线/本机模拟检查。没有用真实账号认证，没有修改正在使用的Clash配置，也没有关闭用户浏览器标签。实际Clash正常退出与重启、生效检查、真实SFTP传输、安装升级、打包后45分钟保活以及真实标签恢复，仍属于后续验收。
+本阶段完成源码融合、候选安装器本机核查及一次专用标签页真实保活测试。该测试运行 1456.547 秒，完成两次 HTTP 200、TLS 校验通过的 HTTPS 交互，异常路由采样为 0，因专用标签页导航而停止；按当前人工口径满足超过 15 分钟标准，但不记为正式 45 分钟通过。没有使用真实 SSH 密码，没有修改正在使用的Clash配置，也没有关闭业务浏览器标签。实际Clash应用/回滚、真实SFTP传输、专用标签恢复与失败终止及正式 Release 下载复核，仍属于后续验收。
 
 上游依据：Clash 2.5.8的数据目录解析见[官方固定版本源码](https://github.com/clash-verge-rev/clash-verge-rev/blob/v2.5.8/src-tauri/src/utils/dirs.rs)；增强脚本入口见[官方扩展配置说明](https://www.clashverge.dev/guide/extend.html)；正常退出采用[Windows Restart Manager](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/nf-restartmanager-rmshutdown)且不使用强制关闭标志。本机核心查询字段依据[Mihomo官方API说明](https://github.com/MetaCubeX/Meta-Docs/blob/main/docs/api/index.md)和[实际规则返回实现](https://github.com/MetaCubeX/mihomo/blob/Meta/hub/route/rules.go)核对。
