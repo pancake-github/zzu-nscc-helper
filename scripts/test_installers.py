@@ -7,6 +7,14 @@ import os  # 只修改本测试进程及其子进程的环境。
 from pathlib import Path  # 测试安装目录与个人文件隔离。
 import subprocess  # 不调用用户Python执行已安装软件。
 import tempfile  # 每一轮独立临时安装位置。
+from audit_release import extension_payload  # 共用真实载荷版本与哈希核对。
+
+def check_installed_extension(root, expected):  # 确认安装后的文件，而不是仅检查源码或压缩包。
+    folder = root / 'modules/zzu_nscc_helper/keepalive/extension'  # 标准安装目录。
+    if json.loads((folder / 'manifest.json').read_text(encoding='utf-8'))['version'] != expected['version']:  # 旧组件不能混入新版安装。
+        raise ValueError('INSTALLED_EXTENSION_VERSION_MISMATCH')  # 不报告安装矩阵通过。
+    if any(hashlib.sha256((folder / name).read_bytes()).hexdigest() != digest for name, digest in expected['sha256'].items()):  # 同版本但旧脚本也必须拒绝。
+        raise ValueError('INSTALLED_EXTENSION_CONTENT_MISMATCH')  # 版本号和实际功能同时核验。
 
 def execute(command, **options):  # 超时、失败保留真实错误码。
     completed = subprocess.run(command, capture_output=True, timeout=240, creationflags=subprocess.CREATE_NO_WINDOW, **options)  # 只运行本次安装器或其EXE。
@@ -20,14 +28,39 @@ def execute(command, **options):  # 超时、失败保留真实错误码。
         raise ValueError('INSTALLER_COMMAND_FAILED_' + str(completed.returncode))  # 不将失败忽略。
     return completed  # 自检结果在内存中解析。
 
+def public_online_smoke(output):  # 发布后从真实GitHub地址下载组件，不使用本地载荷缓存。
+    manifest = json.loads((output / 'payload-manifest.json').read_text(encoding='utf-8'))  # 工作流已验证整个公开资产集合。
+    extension = extension_payload(output, manifest)  # 本轮必须安装的真实扩展字节。
+    installer = output / ('zzu-nscc-helper-online-' + manifest['version'] + '-x64.exe')  # 与公开发布完全相同的安装器。
+    with tempfile.TemporaryDirectory(prefix='zzu-public-online-') as temporary:  # 不访问任何真实用户配置。
+        root = Path(temporary) / 'program'  # 一次性CI安装路径。
+        environment = dict(os.environ, QT_QPA_PLATFORM='offscreen', PYTHONHOME='', PYTHONPATH='', LOCALAPPDATA=str(Path(temporary) / 'local-data'))  # 隔离运行数据。
+        environment['PATH'] = str(Path(os.environ['WINDIR']) / 'System32')  # 不通过PATH借用Python。
+        try:  # 任何失败都清理本轮注册。
+            execute([str(installer), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/DIR=' + str(root), '/COMPONENTS=keepalive,routing,sftp', '/TASKS='], env=environment)  # 故意不传PAYLOADDIR，实际访问安装器内嵌GitHub链接。
+            check_installed_extension(root, extension)  # 真实下载后核对0.4.1及完整脚本。
+            result = json.loads(execute([str(root / 'zzu-nscc-maintenance.exe'), 'self-test'], env=environment).stdout.decode('utf-8'))  # 验证下载运行库可独立启动。
+            if not result['ok'] or result['components'] != ['keepalive', 'routing', 'sftp'] or result['external_python_modules']: raise ValueError('PUBLIC_ONLINE_SELF_TEST_FAILED')  # 不能只看安装器退出码。
+            execute([str(root / 'zzu-nscc-helper.exe'), '--preview', '--smoke-test'], env=environment)  # 只启动预览，不请求平台。
+        finally:  # 仅卸载本轮临时软件。
+            if (root / 'unins000.exe').is_file(): execute([str(root / 'unins000.exe'), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], env=environment)  # 不影响用户主安装。
+    report = {'passed':True, 'version':manifest['version'], 'extension_version':extension['version'], 'installer_sha256':hashlib.sha256(installer.read_bytes()).hexdigest(), 'online_source':'public_github_release', 'components':['keepalive', 'routing', 'sftp'], 'uninstalled':True, 'real_platform_tested':False, 'clean_windows11_tested':False}  # Windows云机器不是用户干净Win11。
+    (output / 'public-online-installation.json').write_text(json.dumps(report, indent=2), encoding='utf-8')  # 独立报告，不改已发布SHA清单。
+    print(json.dumps(report))  # 不输出路径、凭据或网络正文。
+    return 0  # 公网下载和安装流程实际通过。
+
 def main():  # CI使用一次性机器，不能在个人机器偷偷执行整套安装。
     parser = argparse.ArgumentParser(description=__doc__)  # 不接收凭据。
     parser.add_argument('folder', type=Path)  # 已审计构建输出。
+    parser.add_argument('--public-online', action='store_true')  # 发布后独立验收真实在线下载路径。
     args = parser.parse_args()  # 实际产物目录。
     if os.environ.get('GITHUB_ACTIONS') != 'true':  # 自动矩阵仅限一次性CI机器。
         raise ValueError('DISPOSABLE_CI_REQUIRED')  # 本机实测另用明确专用流程。
     output = args.folder.resolve()  # 对路径进行归一化。
-    version = json.loads((output / 'payload-manifest.json').read_text(encoding='utf-8'))['version']  # 测试实际构建版本。
+    if args.public_online: return public_online_smoke(output)  # 不重复十四轮缓存矩阵或修改发布资产。
+    manifest = json.loads((output / 'payload-manifest.json').read_text(encoding='utf-8'))  # 测试实际构建清单。
+    version = manifest['version']  # 本轮软件版本。
+    extension = extension_payload(output, manifest)  # 固定安装后必须匹配的组件。
     combinations = [part for count in (1, 2, 3) for part in itertools.combinations(('keepalive', 'routing', 'sftp'), count)]  # 七种组合完整覆盖。
     records = []  # 只公开技术结果，不公开机器用户目录。
     environment = dict(os.environ, QT_QPA_PLATFORM='offscreen', PYTHONHOME='', PYTHONPATH='')  # 清空外部Python导入配置。
@@ -58,12 +91,32 @@ def main():  # CI使用一次性机器，不能在个人机器偷偷执行整套
                     for component, relative in {'keepalive': 'keepalive', 'routing': 'routing.py', 'sftp': 'transfer'}.items():  # 未选组件必须实际不存在。
                         if (root / 'modules/zzu_nscc_helper' / relative).exists() != (component in selected):  # 不靠隐藏标签页冒充组件安装。
                             raise ValueError('UNSELECTED_COMPONENT_INSTALLED')  # 阻止发布。
-                    records.append({'kind': kind, 'components': list(selected), 'passed': True, 'installer_sha256': digest, 'external_python_modules': 0, 'online_source': 'verified_local_cache' if kind == 'online' else 'embedded_payloads'})  # 不能将缓存测试称为GitHub真实下载测试。
+                    if 'keepalive' in selected: check_installed_extension(root, extension)  # 每种含保活的组合都验证实际安装的扩展。
+                    records.append({'kind': kind, 'components': list(selected), 'passed': True, 'installer_sha256': digest, 'extension_version': extension['version'] if 'keepalive' in selected else None, 'external_python_modules': 0, 'online_source': 'verified_local_cache' if kind == 'online' else 'embedded_payloads'})  # 不能将缓存测试称为GitHub真实下载测试。
                 finally:  # 只卸载本轮实际生成的产品。
                     uninstaller = root / 'unins000.exe'  # 不搜索其他安装。
                     if uninstaller.is_file():  # 即使后置注册失败也尝试撤销。
                         execute([str(uninstaller), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], env=environment)  # 仅保留本轮私有记录，临时根由标准库清理。
     safety = []  # 升级、保留用户资料和坏载荷分别记录。
+    for kind in ('offline', 'online'):  # 单独验证覆盖旧扩展时无需额外补丁。
+        with tempfile.TemporaryDirectory(prefix='zzu-extension-upgrade-') as temporary:  # 仅使用一次性CI目录。
+            root = Path(temporary) / 'program'  # 本轮唯一测试安装。
+            environment['LOCALAPPDATA'] = str(Path(temporary) / 'local-data')  # 私有数据隔离。
+            installer = output / ('zzu-nscc-helper-' + kind + '-' + version + '-x64.exe')  # 相同待发布字节。
+            command = [str(installer), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/DIR=' + str(root), '/COMPONENTS=keepalive', '/TASKS=']  # 只测保活升级。
+            if kind == 'online': command.append('/PAYLOADDIR=' + str(output))  # 发布前仍使用校验缓存。
+            try:  # 无论成功失败都清理本轮注册。
+                execute(command, env=environment)  # 建立一个正常旧组件测试容器。
+                folder = root / 'modules/zzu_nscc_helper/keepalive/extension'  # 确定的组件目录。
+                old = json.loads((folder / 'manifest.json').read_text(encoding='utf-8'))  # 仅改模拟目录中的版本。
+                old['version'] = '0.4.0'  # 合成旧组件，不借用用户浏览器。
+                (folder / 'manifest.json').write_text(json.dumps(old), encoding='utf-8')  # 模拟安装目录仍有旧manifest。
+                (folder / 'background.js').write_text('// synthetic older extension\n', encoding='utf-8')  # 模拟旧脚本内容。
+                execute(command, env=environment)  # 原位安装必须覆盖旧组件。
+                check_installed_extension(root, extension)  # 版本和脚本完整哈希同时一致才通过。
+                safety.append({'kind': kind, 'case': 'replace_synthetic_legacy_extension', 'passed': True, 'extension_version': extension['version']})  # 不冒充完整旧版到新版迁移实测。
+            finally:  # 不留下本轮Native Messaging注册。
+                if (root / 'unins000.exe').is_file(): execute([str(root / 'unins000.exe'), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], env=environment)  # 仅卸载本轮临时产品。
     for kind in ('offline', 'online'):  # 两种安装器都必须能添加组件。
         with tempfile.TemporaryDirectory(prefix='zzu-upgrade-') as temporary:  # 与十四轮新装隔离。
             root = Path(temporary) / 'program'  # 本轮唯一安装目录。

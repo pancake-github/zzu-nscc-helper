@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zzu-nscc-helper"
-version = "0.5.0b1"
+version = "0.5.0b2"
 description = "郑州超算平台专用Windows助手：SSL VPN保活、Clash分流和SFTP传输"
 readme = "README.md"
 requires-python = ">=3.12"

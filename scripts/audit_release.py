@@ -9,9 +9,22 @@ import zipfile  # 实际读取每个压缩成员。
 from audit_public_tree import violations  # 源码与组件采用同一凭据检查。
 BAD_BYTES = re.compile(rb'-----BEGIN (?:ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY-----\s+[A-Za-z0-9+/=\r\n]{64,}-----END (?:ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b')  # 检查完整密钥材料，避免误判加密库内置的格式标签。
 
+def extension_payload(folder, manifest):  # 安装器与独立扩展包必须携带相同实际组件。
+    expected = manifest.get('extension_version')  # 旧发布没有该字段，保留历史审核兼容性。
+    if expected is None:  # 新版必须声明，不能靠缺字段绕过。
+        if manifest['version'] != '0.5.0-beta.1': raise ValueError('EXTENSION_VERSION_MISSING')  # 仅历史首版允许省略。
+        return None  # 历史材料保持原有审核范围。
+    prefix = 'modules/zzu_nscc_helper/keepalive/extension/'  # 两种安装器最终落盘位置。
+    with zipfile.ZipFile(folder / 'keepalive.zip') as payload, zipfile.ZipFile(folder / ('zzu-nscc-helper-edge-' + manifest['version'] + '.zip')) as standalone:  # 核对实际分发内容。
+        files = {name: payload.read(prefix + name) for name in ('manifest.json', 'background.js')}  # 包内两项关键文件。
+        if json.loads(files['manifest.json'])['version'] != expected: raise ValueError('EXTENSION_VERSION_MISMATCH')  # 不能只改外层版本标签。
+        if any(standalone.read(name) != content for name, content in files.items()): raise ValueError('EXTENSION_ASSET_MISMATCH')  # 独立包与安装载荷必须一致。
+    return {'version': expected, 'sha256': {name: hashlib.sha256(content).hexdigest() for name, content in files.items()}}  # 可供真实安装后再次比对。
+
 def audit(folder):  # 本机和CI共用，不读取本机用户数据。
     manifest = json.loads((folder / 'payload-manifest.json').read_text(encoding='utf-8'))  # 无凭据元数据。
     errors, files = [], 0  # 只输出类别及计数。
+    extension = extension_payload(folder, manifest)  # 审核两种安装器使用的真实扩展字节。
     if set(manifest.get('units', {})) != {'core', 'keepalive', 'routing', 'sftp'}:  # 必须真正按组件分发。
         errors.append('PAYLOAD_UNITS_INVALID')  # 不猜测缺失组件。
     for unit, record in manifest['units'].items():  # 逐一核验实际载荷。
@@ -55,7 +68,7 @@ def audit(folder):  # 本机和CI共用，不读取本机用户数据。
     for name, digest in sums.items():  # 不信任文件扩展名代替哈希。
         if hashlib.sha256((folder / name).read_bytes()).hexdigest() != digest:  # 实际完整读取。
             errors.append('ASSET_HASH_MISMATCH')  # 阻止上传。
-    return {'passed': not errors, 'archive_members_checked': files, 'assets_checked': len(expected), 'errors': sorted(set(errors))}  # 脱敏摘要。
+    return {'passed': not errors, 'archive_members_checked': files, 'assets_checked': len(expected), 'extension': extension, 'errors': sorted(set(errors))}  # 脱敏摘要。
 
 if __name__ == '__main__':  # 导入可用于离线故障测试。
     parser = argparse.ArgumentParser(description=__doc__)  # 只接受输出目录。

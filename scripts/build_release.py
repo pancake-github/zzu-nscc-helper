@@ -76,7 +76,10 @@ def payloads():  # 已完成PyInstaller构建后拆分载荷。
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()  # 固定产物与实际公开源码的对应关系。
     (core / 'build-info.json').write_text(json.dumps({'schema': 1, 'version': SETTINGS['version'], 'source_commit': commit, 'dependencies': dependencies}, indent=2), encoding='utf-8')  # 可公开、无本机账号。
     (core / 'corresponding-sources.json').write_text(json.dumps(source_index, ensure_ascii=False, indent=2), encoding='utf-8')  # 安装目录提供确切版本和源码获取位置。
-    manifest = {'schema': 1, 'version': SETTINGS['version'], 'tag': SETTINGS['tag'], 'units': {}}  # 安装器的固定版本清单。
+    extension_version = json.loads((ROOT / 'src/zzu_nscc_helper/keepalive/extension/manifest.json').read_text(encoding='utf-8'))['version']  # 从实际扩展读取版本。
+    if extension_version != SETTINGS['extension_version']:  # 打包目标与源码不一致必须阻止。
+        raise ValueError('EXTENSION_VERSION_MISMATCH')  # 不将旧扩展混入新安装器。
+    manifest = {'schema': 1, 'version': SETTINGS['version'], 'tag': SETTINGS['tag'], 'extension_version': extension_version, 'units': {}}  # 两种安装器共用明确组件版本。
     manifest['units']['core'] = archive(core, output / 'core.zip')  # 公共运行库只打包一次。
     module_root = ROOT / 'src/zzu_nscc_helper'  # 唯一业务源码输入。
     for name, entries in PARTS.items():  # 三个可独立下载的组件。

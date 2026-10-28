@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      verify_public_release:
+        description: '仅验证当前源码对应的已发布在线安装器'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -11,6 +16,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
+    if: ${{ inputs.verify_public_release != true }}
     runs-on: windows-2025
     timeout-minutes: 60
     env:
@@ -74,5 +80,44 @@ jobs:
         with:
           name: windows-candidate-${{ github.sha }}
           path: dist/release/*
+          if-no-files-found: error
+          retention-days: 14
+  verify_public:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_public_release == true }}
+    runs-on: windows-2025
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.4'
+      - name: Download and verify public release assets anonymously
+        shell: python
+        run: |
+          import hashlib, json, pathlib, urllib.request # 仅下载本仓库公开资产。
+          settings = json.loads(pathlib.Path('packaging/build-settings.json').read_text(encoding='utf-8')) # 从本次来源读取固定版本。
+          base = 'https://github.com/pancake-github/zzu-nscc-helper/releases/download/' + settings['tag'] + '/' # 不接收任意外部地址。
+          output = pathlib.Path('public-release') # 独立临时输出。
+          output.mkdir() # 不覆盖先前材料。
+          sums = urllib.request.urlopen(base + 'SHA256SUMS.txt', timeout=60).read() # 匿名读取校验清单。
+          (output / 'SHA256SUMS.txt').write_bytes(sums) # 原样保留公开清单。
+          for line in sums.decode('ascii').splitlines(): # 每个公开资产完整回读。
+              digest, name = line.split('  ', 1) # 标准清单格式。
+              assert pathlib.PurePosixPath(name).name == name and '\\' not in name and ':' not in name # 拒绝目录穿越。
+              with urllib.request.urlopen(base + name, timeout=120) as response: content = response.read() # 无平台或GitHub凭据。
+              assert hashlib.sha256(content).hexdigest() == digest # 不运行未验证的安装器。
+              (output / name).write_bytes(content) # 只写当前目录。
+      - name: Audit downloaded public assets
+        shell: pwsh
+        run: python -B scripts/audit_release.py public-release
+      - name: Exercise real online download install and uninstall
+        shell: pwsh
+        run: python -B scripts/test_installers.py public-release --public-online
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-online-installation-${{ github.sha }}
+          path: public-release/public-online-installation.json
           if-no-files-found: error
           retention-days: 14

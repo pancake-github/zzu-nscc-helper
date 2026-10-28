@@ -8,14 +8,57 @@ import tempfile  # 独立测试材料。
 import unittest  # 现有标准库测试框架。
 from unittest.mock import patch  # 不访问真实注册表或生产进程。
 import yaml  # 工作流必须先通过语法检查。
+import hashlib  # 安装后按实际脚本哈希检查。
+import zipfile  # 构造不包含用户数据的载荷夹具。
 ROOT = Path(__file__).resolve().parents[1]  # 独立仓库。
 sys.path.insert(0, str(ROOT / 'src'))  # 不安装包。
 sys.path.insert(0, str(ROOT / 'scripts'))  # 导入资产审核模块。
 from zzu_nscc_helper import installation  # 活跃安装迁移逻辑。
-from audit_release import BAD_BYTES  # 真实构建资产审核器。
+from audit_release import BAD_BYTES, extension_payload  # 真实构建资产审核器及扩展一致性检查。
+from test_installers import check_installed_extension  # 安装矩阵使用相同的版本和内容验证。
 from zzu_nscc_helper.keepalive.acceptance import continuous_passes  # 持续验收判定不会发起请求。
 
 class InstallationTests(unittest.TestCase):  # 迁移必须可重入且不能覆盖外部修改。
+    def test_release_versions_match(self):  # 防止界面、安装器和下载地址出现不同版本。
+        import tomllib  # 标准库读取打包元数据。
+        from zzu_nscc_helper import __version__  # 实际GUI显示版本。
+        settings = json.loads((ROOT / 'packaging/build-settings.json').read_text(encoding='utf-8'))  # 实际构建常量。
+        package = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))  # Python发行版本。
+        manifest = json.loads((ROOT / 'src/zzu_nscc_helper/keepalive/extension/manifest.json').read_text(encoding='utf-8'))  # 实际扩展版本。
+        self.assertEqual(settings['version'].replace('-beta.', 'b'), __version__)  # 不单改安装器标签。
+        self.assertEqual(package['project']['version'], __version__)  # 包元数据同步。
+        self.assertEqual(settings['tag'], 'v' + settings['version'])  # 在线下载地址对应本轮版本。
+        self.assertEqual(settings['extension_version'], manifest['version'])  # 真实扩展与构建声明一致。
+
+    def test_extension_payload_rejects_old_or_different_content(self):  # 防止新版本标签内仍装旧扩展。
+        folder = self.root / 'assets'  # 只在本轮测试目录写ZIP。
+        folder.mkdir()  # 不读取真实发布资产。
+        manifest = {'version':'0.5.0-beta.2', 'extension_version':'0.4.1'}  # 明确本轮打包要求。
+        def build(version, independent_script):  # 每轮只改一项故障。
+            files = {'manifest.json':json.dumps({'version':version}).encode(), 'background.js':b'// current synthetic script'}  # 全部为离线合成材料。
+            with zipfile.ZipFile(folder / 'keepalive.zip', 'w') as archive:  # 真实载荷路径布局。
+                for name, data in files.items(): archive.writestr('modules/zzu_nscc_helper/keepalive/extension/' + name, data)  # 固定安全路径。
+            with zipfile.ZipFile(folder / 'zzu-nscc-helper-edge-0.5.0-beta.2.zip', 'w') as archive:  # 独立扩展分发包。
+                for name, data in files.items(): archive.writestr(name, independent_script if name == 'background.js' else data)  # 可注入脚本不一致。
+        build('0.4.1', b'// current synthetic script')  # 正常版本及内容。
+        self.assertEqual(extension_payload(folder, manifest)['version'], '0.4.1')  # 必须返回可供安装后核对的版本。
+        build('0.4.0', b'// current synthetic script')  # 错误旧版manifest。
+        with self.assertRaisesRegex(ValueError, 'VERSION_MISMATCH'): extension_payload(folder, manifest)  # 不允许外层新版本掩盖旧组件。
+        build('0.4.1', b'// different synthetic script')  # 相同版本但脚本不同。
+        with self.assertRaisesRegex(ValueError, 'ASSET_MISMATCH'): extension_payload(folder, manifest)  # 独立包和安装器必须相同。
+
+    def test_installed_extension_checks_script_not_only_version(self):  # 安装器落盘后必须完整替换旧脚本。
+        folder = self.root / 'modules/zzu_nscc_helper/keepalive/extension'  # 真实安装相对路径。
+        folder.mkdir(parents=True)  # 仅临时目录。
+        files = {'manifest.json':json.dumps({'version':'0.4.1'}).encode(), 'background.js':b'// current synthetic script'}  # 不读取用户扩展。
+        for name, data in files.items(): (folder / name).write_bytes(data)  # 建立正常落盘结果。
+        expected = {'version':'0.4.1', 'sha256':{name:hashlib.sha256(data).hexdigest() for name, data in files.items()}}  # 由实际内容生成基准。
+        check_installed_extension(self.root, expected)  # 正常安装应通过。
+        (folder / 'background.js').write_bytes(b'// old synthetic script')  # 版本正确但旧脚本残留。
+        with self.assertRaisesRegex(ValueError, 'CONTENT_MISMATCH'): check_installed_extension(self.root, expected)  # 必须阻止交付。
+        (folder / 'manifest.json').write_text(json.dumps({'version':'0.4.0'}), encoding='utf-8')  # 旧版本也单独检测。
+        with self.assertRaisesRegex(ValueError, 'VERSION_MISMATCH'): check_installed_extension(self.root, expected)  # 不能只测安装器退出码。
+
     def test_signed_injection_cannot_disguise_borrowed_runtime(self):  # 外部签名不能绕过Python或Qt来源检查。
         with patch.object(installation, 'trusted_signature_offline', return_value=True) as signature:  # 不改变系统信任或联网。
             for name in ('python312.dll', 'Qt5Core.dll', 'foreign.pyd', 'libcrypto-3-x64.dll'):  # 同名依赖以及解释器均需拒绝。
