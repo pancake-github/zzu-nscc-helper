@@ -9,6 +9,14 @@ on:
         description: '仅验证当前源码对应的已发布在线安装器'
         type: boolean
         default: false
+      publish_candidate_run:
+        description: '发布已通过验收的本仓库构建编号；留空不发布'
+        type: string
+        default: ''
+      candidate_source:
+        description: '待发布构建的完整源码提交；须与构建和包内信息一致'
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -16,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    if: ${{ inputs.verify_public_release != true }}
+    if: ${{ inputs.verify_public_release != true && inputs.publish_candidate_run == '' }}
     runs-on: windows-2025
     timeout-minutes: 60
     env:
@@ -119,5 +127,93 @@ jobs:
         with:
           name: public-online-installation-${{ github.sha }}
           path: public-release/public-online-installation.json
+          if-no-files-found: error
+          retention-days: 14
+  publish_candidate:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_candidate_run != '' && inputs.verify_public_release != true }}
+    runs-on: windows-2025
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    env:
+      PYTHONUTF8: '1'
+      CANDIDATE_RUN: ${{ inputs.publish_candidate_run }}
+      CANDIDATE_SOURCE: ${{ inputs.candidate_source }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.4'
+      - name: Audit sources and reachable history before publishing
+        shell: pwsh
+        run: python -B scripts/audit_public_tree.py
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-candidate-${{ inputs.candidate_source }}
+          run-id: ${{ inputs.publish_candidate_run }}
+          github-token: ${{ github.token }}
+          path: candidate-release
+      - name: Audit exact tested candidate assets
+        shell: pwsh
+        run: python -B scripts/audit_release.py candidate-release
+      - name: Publish only verified original candidate bytes
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import hashlib, json, os, pathlib, re, urllib.request, zipfile # 不安装额外依赖或读取用户电脑。
+          repo = 'pancake-github/zzu-nscc-helper' # 唯一授权项目。
+          assert os.environ['GITHUB_REPOSITORY'] == repo # Fork不能向原项目发布。
+          run_id, source = os.environ['CANDIDATE_RUN'], os.environ['CANDIDATE_SOURCE'] # 输入只作为标识，不执行命令。
+          assert run_id.isdecimal() and re.fullmatch('[0-9a-f]{40}', source) # 拒绝任意路径或表达式。
+          folder = pathlib.Path('candidate-release') # 下载的同一云构建产物。
+          manifest = json.loads((folder / 'payload-manifest.json').read_text(encoding='utf-8')) # 实际产物版本。
+          tag, version = manifest['tag'], manifest['version'] # 不重命名旧安装包伪造版本。
+          settings = json.loads(pathlib.Path('packaging/build-settings.json').read_text(encoding='utf-8')) # 当前审核源码的发布目标。
+          assert (tag, version, manifest['extension_version']) == (settings['tag'], settings['version'], settings['extension_version']) # 三个版本必须一致。
+          with zipfile.ZipFile(folder / 'core.zip') as archive: info = json.loads(archive.read('build-info.json')) # 核对冻结运行库来源。
+          assert info['source_commit'] == source and info['version'] == version # 不混用提交或产物。
+          matrix = json.loads((folder / 'installer-matrix.json').read_text(encoding='utf-8')) # 必须有真实安装矩阵。
+          assert matrix['status'] == 'component_matrix_passed' and len(matrix['cases']) == 14 and all(row['passed'] for row in matrix['cases']) # 两种安装器七种组合全通过。
+          assert all(row['extension_version'] == manifest['extension_version'] for row in matrix['cases'] if 'keepalive' in row['components']) # 所有保活安装均为目标组件。
+          assert len([row for row in matrix['safety_cases'] if row['case'] == 'replace_synthetic_legacy_extension' and row['passed']]) == 2 # 两种安装器均覆盖旧扩展。
+          expected = {p.name: {'sha256': hashlib.sha256(p.read_bytes()).hexdigest(), 'bytes': p.stat().st_size} for p in folder.iterdir() if p.is_file()} # 固定完整资产集合。
+          assert len(expected) == 10 # 不上传任意额外文件。
+          class NoRedirect(urllib.request.HTTPRedirectHandler): # 凭据只发GitHub官方固定地址。
+              def redirect_request(self, req, fp, code, msg, headers, newurl): raise RuntimeError('AUTH_REDIRECT_REJECTED') # 不向其他主机转发认证。
+          opener = urllib.request.build_opener(NoRedirect()) # 发布API不需要重定向。
+          def call(method, endpoint, value=None, content=None): # 仅固定GitHub API或上传域。
+              host = 'https://uploads.github.com' if content is not None else 'https://api.github.com' # 只允许官方服务。
+              headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28'} # 短期工作流令牌不写日志或资产。
+              data = content if content is not None else json.dumps(value).encode() if value is not None else None # 明确请求体。
+              headers['Content-Type'] = 'application/octet-stream' if content is not None else 'application/json' # 固定媒体类型。
+              with opener.open(urllib.request.Request(host + endpoint, data=data, headers=headers, method=method), timeout=180) as response: return json.load(response) # 仅解析有限API结果。
+          base = '/repos/' + repo # 固定项目接口前缀。
+          run = call('GET', base + '/actions/runs/' + run_id) # 以GitHub实际状态核验来源。
+          assert run['head_sha'] == source and run['conclusion'] == 'success' and run['status'] == 'completed' and run['repository']['full_name'] == repo # 失败候选不能发布。
+          notes = '本版的完整离线安装包和在线安装器均直接包含 Edge 连接组件 0.4.1，兼容平台带会话参数的 E-File / 计算服务地址，无需另装补丁。\n\n主程序版本 ' + version + '，扩展版本 0.4.1，通信协议保持0.4.0。支持保活、分流、SFTP任意非空组件组合。升级前退出助手，运行新版安装器；首次使用仍需在Edge加载安装目录内扩展，已有用户升级后重新加载一次。\n\n本轮验证：在线、离线各7种安装组合，实际扩展版本和脚本哈希、两种安装器覆盖合成旧扩展、添加组件、保留私有数据、坏载荷拒绝均通过。发布前在线矩阵使用固定哈希缓存；公网下载安装由发布后独立工作流验证。\n\n仍为非官方测试版，仅适用于本项目说明的郑州超算平台。未完成的真实SFTP、Clash应用回滚、标签恢复/失败终止验收仍保留为已知限制。本轮没有重做长期保活或干净Windows11测试，不将历史beta.1结果冒充本轮通过。安装器未作Authenticode签名，请核对SHA256SUMS.txt。\n\n来源提交：`' + source + '`；构建：`' + run_id + '`。GPL-3.0，包内附许可证、依赖及对应源码信息。\n' # 仅公开技术信息。
+          existing = [r for r in call('GET', base + '/releases?per_page=100') if r['tag_name'] == tag] # 重入不重复创建。
+          assert len(existing) <= 1 # 歧义时不修改已有发布。
+          release = existing[0] if existing else call('POST', base + '/releases', {'tag_name':tag,'target_commitish':source,'name':'郑州超算助手 ' + tag + ' · 内置扩展0.4.1','body':notes,'draft':True,'prerelease':True,'make_latest':'false'}) # 所有资产完成前保持草稿。
+          assert release['target_commitish'] == source and release['prerelease'] # 不能覆盖其他版本。
+          assets = {a['name']:a for a in call('GET', base + '/releases/' + str(release['id']) + '/assets')} # 已有资产必须完全匹配。
+          assert not (set(assets) - set(expected)) # 不删除未知文件。
+          for name, value in sorted(expected.items(), key=lambda pair: pair[1]['bytes']): # 从小到大上传，便于失败恢复。
+              assert re.fullmatch('[A-Za-z0-9._-]+', name) # 文件名不能改变API路径。
+              if name not in assets: assets[name] = call('POST', base + '/releases/' + str(release['id']) + '/assets?name=' + name, content=(folder / name).read_bytes()) # 上传原始已审计字节。
+              assert assets[name]['size'] == value['bytes'] and assets[name]['digest'] == 'sha256:' + value['sha256'] # GitHub存储摘要逐项一致。
+          release = call('PATCH', base + '/releases/' + str(release['id']), {'draft':False,'prerelease':True,'make_latest':'false'}) # 不误标稳定版。
+          ref = call('GET', base + '/git/ref/tags/' + tag) # 核验实际公开标签。
+          assert ref['object']['sha'] == source and not release['draft'] # 标签必须对应实测来源。
+          report = {'status':'PUBLISHED','tag':tag,'source_commit':source,'build_run_id':int(run_id),'release_id':release['id'],'url':release['html_url'],'expected':expected} # 无令牌或用户资料。
+          pathlib.Path('publication.json').write_text(json.dumps(report, indent=2), encoding='utf-8') # 独立脱敏发布记录。
+          print(json.dumps({'published':release['html_url'],'assets':len(expected)})) # 只输出公共链接与计数。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: publication-${{ inputs.candidate_source }}
+          path: publication.json
           if-no-files-found: error
           retention-days: 14
