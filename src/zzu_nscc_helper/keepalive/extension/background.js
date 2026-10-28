@@ -16,8 +16,12 @@ function fail(code) { // 单次故障只发送一次。
   clearBinding(); // 先撤销自动行为。
   if (old) emit('failed', {token: old.token, code}); // 不发送页面正文或密码。
 } // 结束失败。
-function safeTarget(url) { // 首版仅允许已知超算入口。
-  try { const u = new URL(url); return u.origin === 'https://172.99.2.7' && u.pathname === '/ac/console3/index.html' && ['#/e-file', '#/space/dashboard'].includes(u.hash) && !u.username && !u.password; } catch (_) { return false; } // 不恢复任意网址。
+function safeTarget(url) { // 只允许已知超算入口及平台会话地址。
+  try { // URL解析失败时拒绝绑定，不猜测目标。
+    const u = new URL(url); // 只在内存中检查，不记录会话参数。
+    const platformPath = /^\/ac\/console3\/index\.html(?:;jsessionid=[A-Fa-f0-9]{32})?$/.test(u.pathname); // 仅兼容一个32位十六进制会话标识，不放行其他路径参数。
+    return u.origin === 'https://172.99.2.7' && platformPath && ['#/e-file', '#/space/dashboard'].includes(u.hash) && !u.username && !u.password; // 保留原站点、页面和认证信息限制；绑定仍保存完整原始URL。
+  } catch (_) { return false; } // 非法地址不能绑定或恢复。
 } // 结束地址检查。
 function compact(tab) { // 只保留桌面选择所需元数据。
   return {id: tab.id, windowId: tab.windowId, title: (tab.title || '无标题').slice(0, 200), url: (tab.url || '').slice(0, 2048), status: tab.status || 'loading', eligible: safeTarget(tab.url || '')}; // 不读取 Cookie。

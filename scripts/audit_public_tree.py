@@ -22,6 +22,7 @@ GITHUB_TOKEN = re.compile(r'\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0
 PERSONAL_PATH = re.compile(r'[A-Za-z]:[\\/](?:Users[\\/][^\\/\s\"\']+|ANACONDA3)(?:[\\/]|\b)', re.IGNORECASE)  # 排除用户目录和本机环境根路径。
 CREDENTIAL_FIELDS = frozenset(('user', 'username', 'password', 'passwd', 'secret', 'api_key', 'access_token', 'subscription_url'))  # 公共配置不能包含实际认证值。
 URL_AUTH = re.compile(r'https?://[^/\s:@]+:[^/\s@]+@', re.IGNORECASE)  # URL中也不能夹带用户名密码。
+URL_SESSION = re.compile(r';jsessionid=[A-Fa-f0-9]{32}', re.IGNORECASE)  # 平台URL中的实际会话标识同样不得进入公开源码或历史。
 
 def structured_credentials(value):  # 递归检查公共JSON中的实际值。
     if isinstance(value, dict):  # 只检查字段，不把说明文档当认证。
@@ -40,6 +41,8 @@ def violations(name, text):  # 只返回类别，绝不把疑似口令写入报�
         errors.append('PERSONAL_ABSOLUTE_PATH')  # 只报告类别。
     if URL_AUTH.search(text):  # 禁止将认证信息嵌入URL。
         errors.append('URL_CREDENTIAL')  # 不回显URL。
+    if URL_SESSION.search(text):  # 截图或调试网址中的会话标识不能复制到仓库。
+        errors.append('URL_SESSION')  # 只给出类别，不在审核报告泄漏匹配值。
     if name.endswith('.json'):  # 公共资源和构建清单必须是无凭据JSON。
         try:  # 损坏配置也不能放行。
             if structured_credentials(json.loads(text)):  # 只检查实际值。

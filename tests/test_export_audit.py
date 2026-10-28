@@ -23,6 +23,10 @@ class ExportAuditTests(unittest.TestCase):  # 检查发布拦截的实际风险�
         value = 'C:' + '\\Users\\' + 'sample-account\\app.py'  # 合成路径，不是真实个人目录。
         self.assertIn('PERSONAL_ABSOLUTE_PATH', AUDIT.violations('sample.txt', value))  # 必须发现本机绑定。
 
+    def test_blocks_session_url_without_echo(self):  # 浏览器会话参数不得随本次兼容修复公开。
+        value = 'https://172.99.2.7/ac/console3/index.html;jsessionid=' + 'A' * 32 + '#/e-file'  # 仅在内存生成不可用测试标识，不使用真实会话。
+        self.assertEqual(AUDIT.violations('sample.md', value), ['URL_SESSION'])  # 只返回错误类别，不泄漏网址或标识。
+
     def test_blocks_fixed_account(self):  # 固定用户名不能重新混入公开后端。
         self.assertIn('HARDCODED_CREDENTIAL', AUDIT.violations('sample.py', 'USER = "sample-account"'))  # AST检查实际字面量。
 

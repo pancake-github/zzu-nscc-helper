@@ -2,6 +2,8 @@
 
 **已发布首个公开测试版 `v0.5.0-beta.1`。** [下载页面与已知限制](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.1) · [在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/zzu-nscc-helper-online-0.5.0-beta.1-x64.exe) · [完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/zzu-nscc-helper-offline-0.5.0-beta.1-x64.exe)。本版为预发布测试版，实测范围见[安装说明](docs/INSTALLATION.md)。
 
+**E-File 显示“仅查看”、无法绑定？** 已提供 [Edge 连接组件 0.4.1 修复包](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/edge-v0.4.1)，兼容平台添加的 `;jsessionid=…` 会话地址。适用于上述主程序，无需重装主程序；旧安装器仍内含 0.4.0 组件，安装或重装后请按[组件更新说明](docs/INSTALLATION.md#edge-连接组件-041-修复)更新。
+
 **仅适用于本项目说明的郑州超算平台 SSL VPN 接入环境。非官方项目，不适用于其他超算中心。**
 
 郑州超算平台专用 Windows 助手：SSL VPN 保活、Clash Verge Rev 自适应分流及 SFTP 上传下载。支持按需安装、配置备份回滚和文件校验。
@@ -37,7 +39,7 @@
 | 全部安装 | 三项功能 | 仅保活使用 |
 | 自定义 | 任意非空组合 | 按选项决定 |
 
-在线安装器只下载公共运行库和已选组件；离线安装包保留同样的组件选择。每个下载资产都要通过SHA-256校验。Release 中的 `core.zip` 等四个载荷由在线安装器使用，通常无需手动下载。[Edge 扩展包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.1/zzu-nscc-helper-edge-0.5.0-beta.1.zip)亦单独提供；保活首次使用仍需手动加载一次，步骤见[安装说明](docs/INSTALLATION.md)。
+在线安装器只下载公共运行库和已选组件；离线安装包保留同样的组件选择。每个下载资产都要通过SHA-256校验。Release 中的 `core.zip` 等四个载荷由在线安装器使用，通常无需手动下载。[最新 Edge 连接组件 0.4.1](https://github.com/pancake-github/zzu-nscc-helper/releases/download/edge-v0.4.1/zzu-nscc-helper-edge-0.4.1.zip)亦单独提供；保活首次使用仍需手动加载一次，步骤见[安装说明](docs/INSTALLATION.md)。
 
 ## 现有源码与检查
 
