@@ -24,9 +24,9 @@ class DualSessionTests(unittest.TestCase):  # 不继承旧版关闭即停的验�
         self.window.alert = Mock()  # 不弹窗影响用户。
         self.window.bridge = SimpleNamespace(peer=True, last_seen=time.monotonic(), send=Mock(return_value=True))  # 本机消息仅内存记录。
         self.window.vpn_guid = 'offline-vpn-interface'  # 合成身份不做真实路由检测。
-        self.window.received({'event': 'hello', 'version': '0.4.0', 'capabilities': ['web-session-v1']})  # 需要明确新版能力。
+        self.window.received({'event': 'hello', 'version': '0.4.0', 'capabilities': ['web-daily-file-v1']})  # 需要明确新版能力。
         self.tab = {'id': 17, 'windowId': 3, 'title': 'E-File', 'url': 'https://172.99.2.7/ac/console3/index.html#/e-file', 'sessionEligible': True}  # 合成无账号页面。
-        self.window.received({'event': 'tabs', 'version': '0.4.0', 'tabs': [self.tab]})  # 真实列表处理流程。
+        self.window.received({'event': 'tabs', 'version': '0.4.0', 'sessionProtocol': 3, 'tabs': [self.tab]})  # 真实列表处理流程。
 
     def tearDown(self):  # 清理测试 Qt 对象。
         self.window.stop()  # 不残留计时任务。
@@ -42,13 +42,13 @@ class DualSessionTests(unittest.TestCase):  # 不继承旧版关闭即停的验�
         self.assertTrue(self.window.web_pending)  # 只有一个待处理网页轮次。
 
     def success(self):  # 注入通过扩展判据的无敏感摘要。
-        self.window.received({'event': 'web_success', 'token': self.window.token, 'request': self.window.web_request_id, 'pages': 2, 'bytes': 100, 'elapsed': 0.3})  # 不含正文或令牌。
+        self.window.received({'event': 'web_success', 'token': self.window.token, 'request': self.window.web_request_id, 'pages': 2, 'bytes': 1024, 'elapsed': 0.3, 'daily': True, 'cleanup': 'confirmed'})  # 不含正文或令牌。
 
     def test_independent_counters_and_interval(self):  # 网页必须实际成功且间隔按成功计算。
         self.running()  # VPN已有首次成功。
         self.success()  # 网页独立首次成功。
         self.assertEqual((self.window.engine.count, self.window.web_count), (1, 1))  # 两类统计不混用。
-        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 780, delta=1)  # 严格十三分钟。
+        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 86400, delta=1)  # 网页完整成功后24小时。
         previous = self.window.web_due  # 记录旧截止。
         self.success()  # 重复回调必须忽略。
         self.assertEqual(self.window.web_count, 1)  # 不重复计数。
@@ -109,8 +109,74 @@ class DualSessionTests(unittest.TestCase):  # 不继承旧版关闭即停的验�
 
     def test_desktop_reconnect_negotiates_from_list(self):  # NativeHost在助手重启时只请求列表，不重发旧hello。
         self.window.web_capable = False  # 新桌面实例没有收到初始握手。
-        self.window.received({'event': 'tabs', 'version': '0.4.0', 'tabs': [self.tab]})  # 最新列表携带新版专有资格字段。
+        self.window.received({'event': 'tabs', 'version': '0.4.0', 'sessionProtocol': 3, 'tabs': [self.tab]})  # 最新列表携带新版专有资格字段。
         self.assertTrue(self.window.web_capable)  # 不要求反复重载扩展。
         self.assertTrue(self.window.start_button.isEnabled())  # VPN检测有效后可直接启动。
+
+    def test_transient_backoff_recovers_without_manual_rebind(self):  # 单次波动不要求重新登录。
+        self.running()  # 同一授权和VPN周期。
+        token, vpn_due = self.window.token, self.window.engine.due  # 核对重试不重置VPN。
+        for index, delay in enumerate((30, 60, 180, 180)):  # 两次快速退避，之后降频。
+            if index: self.window.request_web()  # 测试直接推进到下一次发起点。
+            self.window.received({'event': 'web_failed', 'token': token, 'request': self.window.web_request_id, 'code': 'WEB_TIMEOUT', 'settled': True})  # 旧请求确已停止。
+            self.assertAlmostEqual(self.window.web_due - time.monotonic(), delay, delta=1)  # 实际退避间隔。
+            self.assertEqual(self.window.token, token)  # 不需要重新绑定。
+            self.assertEqual(self.window.engine.due, vpn_due)  # VPN保持原计时。
+        self.window.alert.assert_called_once()  # 连续失败只提醒一次。
+        self.window.request_web()  # 后台恢复。
+        self.success()  # 新轮返回真实成功。
+        self.assertEqual(self.window.web_failures, 0)  # 清除连续失败。
+        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 86400, delta=1)  # 恢复正常24小时周期。
+
+    def test_deadline_requires_cancel_ack_before_retry(self):  # 不在状态未知时发第二个请求。
+        self.running()  # 原请求正在执行。
+        self.window.operation_deadline = time.monotonic() - 1  # 桌面总截止。
+        self.window.tick()  # 先发取消，不停止VPN。
+        self.assertTrue(self.window.web_cancelling)  # 等待确认期间不可重试。
+        self.assertIsNone(self.window.web_due)  # 未安排第二个请求。
+        self.assertEqual(self.window.bridge.send.call_args.args[0], 'web_cancel')  # 专用取消指令。
+        self.success()  # 取消期间的迟到成功必须丢弃。
+        self.assertEqual(self.window.web_count, 0)  # 不误增计数。
+        self.window.received({'event': 'web_cancelled', 'token': self.window.token, 'request': self.window.web_request_id})  # 正确轮次确认。
+        self.assertFalse(self.window.web_pending)  # 旧请求已结束。
+        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 30, delta=1)  # 此时才可自动重试。
+
+    def test_frozen_page_sync_does_not_invalidate_server_success(self):  # 页面冻结与服务器登录状态分开显示。
+        self.running()  # 两页参与。
+        self.success()  # 后台HTTP真实成功。
+        self.window.received({'event': 'web_sync', 'token': self.window.token, 'request': self.window.web_request_id, 'pages': 2, 'synced': 1})  # 一页冻结。
+        self.assertEqual(self.window.web_count, 1)  # HTTP成功保持有效。
+        self.assertIn('1/2', self.window.web_summary)  # 同步不足不隐瞒。
+        self.window.alert.assert_not_called()  # 单页休眠不弹异常。
+        self.window.received({'event': 'web_targets', 'token': self.window.token, 'pages': 1})  # 关闭其中一页。
+        self.assertIsNotNone(self.window.web_due)  # 剩余页面继续。
+        self.assertEqual(self.window.web_pages, 1)  # 范围确已缩小。
+
+    def test_old_extension_list_cannot_claim_background_support(self):  # 新旧能力不能靠同名字段混淆。
+        self.window.web_capable = False  # 模拟刚启动。
+        self.window.received({'event': 'tabs', 'version': '0.4.0', 'tabs': [self.tab]})  # 旧0.5.0列表仍有sessionEligible。
+        self.assertFalse(self.window.web_capable)  # 必须声明协议2。
+
+    def test_daily_due_does_not_send_between_cycles(self):  # 模拟时钟证明24小时前无网页请求。
+        self.running()  # 两个通道已启动。
+        self.success()  # 首轮完整文件事务完成。
+        due = self.window.web_due  # 真实生产调度的到期点。
+        self.window.bridge.send.reset_mock()  # 只统计之后的命令。
+        with patch('zzu_nscc_helper.keepalive.dual_session.MainWindow.tick'), patch('zzu_nscc_helper.keepalive.dual_session.time.monotonic', return_value=due - 1):  # 仅推进网页时钟，不虚构实际运行24小时。
+            self.window.bridge.last_seen = due - 1  # 本机心跳正常。
+            self.window.tick()  # 还差一秒。
+        self.window.bridge.send.assert_not_called()  # 未到期完全不请求网页。
+        with patch('zzu_nscc_helper.keepalive.dual_session.MainWindow.tick'), patch('zzu_nscc_helper.keepalive.dual_session.time.monotonic', return_value=due):  # 到期时刻。
+            self.window.bridge.last_seen = due  # 本机连接保持。
+            self.window.tick()  # 仅发起一个新轮次。
+        self.assertEqual(self.window.bridge.send.call_count, 1)  # 无补发积压。
+        self.assertEqual(self.window.bridge.send.call_args.args[0], 'web_request')  # 实际调度命令。
+        self.assertTrue(self.window.web_pending)  # 等完整结果再计时。
+
+    def test_readonly_success_cannot_complete_daily_transaction(self):  # 旧扩展成功格式必须被拒绝。
+        self.running()  # 新版绑定。
+        self.window.received({'event': 'web_success', 'token': self.window.token, 'request': self.window.web_request_id, 'pages': 2, 'bytes': 1024, 'elapsed': 1})  # 缺少每日能力及清理确认。
+        self.assertEqual(self.window.web_count, 0)  # 不能把只读请求计为文件成功。
+        self.assertTrue(self.window.engine.active)  # 独立VPN不受影响。
 
 if __name__ == '__main__': unittest.main()  # 独立执行离线用例。

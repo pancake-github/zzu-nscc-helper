@@ -1,5 +1,7 @@
 # 郑州超算助手 · ZZU NSCC Helper
 
+正在验证的 `beta.4` 源码采用 **VPN 13 分钟 + 网页 24 小时**：首次手动开始执行 1 KiB 上传、读回校验、删除与不存在确认，完整成功后等待一天。当前公开安装包仍为下述 beta.3；新版安装与真实验证完成后更新下载入口。详见[维护策略](docs/WEB_SESSION.md)。
+
 **双通道测试版 `v0.5.0-beta.3`：同时维护 VPN 流量与已登录网页会话，两种安装器均内置 Edge 扩展 0.5.0。** [下载页面与已知限制](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.3) · [在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.3/zzu-nscc-helper-online-0.5.0-beta.3-x64.exe) · [完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.3/zzu-nscc-helper-offline-0.5.0-beta.3-x64.exe)。本版为预发布测试版，实测范围见[安装说明](docs/INSTALLATION.md)。
 
 新版支持带 `;jsessionid=…` 的 E-File、计算服务和命令行页面。旧版用户从托盘退出助手后覆盖升级，Edge 首次使用仍需手动加载安装目录内的扩展，升级后重新加载一次，确认扩展为 0.5.0。无需单独安装补丁，见[安装说明](docs/INSTALLATION.md)。
@@ -10,7 +12,7 @@
 
 关键词：郑州超算、国家超级计算郑州中心、SSL VPN、VPN保活、Clash Verge Rev、Mihomo、SFTP、Windows。
 
-## 双通道保活
+## 当前公开 beta.3 的双通道保活
 
 浏览器内执行真实认证 GET，并更新每个选中业务页的会话状态；VPN 独立请求和网页请求各自在成功后等待 13 分钟。默认维护绑定时已打开、属于同一登录会话的 E-File、计算服务和命令行页面。网页失效、关闭或需要重新登录时，只暂停网页维护并提醒，VPN 继续运行；重新登录后手动重新绑定即可。两条通道分别显示成功时间和次数，详细请求与隐私边界见[网页会话说明](docs/WEB_SESSION.md)。
 

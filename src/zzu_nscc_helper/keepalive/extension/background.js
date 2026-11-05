@@ -32,8 +32,8 @@ async function listTabs() { // 列出真实标签页而非窗口标题。
   listBusy = true; // 防止重叠。
   try { // 按小批次发送所有普通标签，避免单帧超大。
     const tabs = (await chrome.tabs.query({})).filter(t => !t.incognito); // 不读取隐私窗口。
-    if (!tabs.length) emit('tabs', {version: '0.4.0', tabs: [], total: 0, first: true, final: true}); // 空列表也完成快照。
-    for (let i = 0; i < tabs.length; i += 20) emit('tabs', {version: '0.4.0', tabs: tabs.slice(i, i + 20).map(compact), total: tabs.length, first: i === 0, final: i + 20 >= tabs.length}); // 每项都是独立标签。
+    if (!tabs.length) emit('tabs', {version: '0.4.0', sessionProtocol: 3, tabs: [], total: 0, first: true, final: true}); // 空列表也完成快照。
+    for (let i = 0; i < tabs.length; i += 20) emit('tabs', {version: '0.4.0', sessionProtocol: 3, tabs: tabs.slice(i, i + 20).map(compact), total: tabs.length, first: i === 0, final: i + 20 >= tabs.length}); // 每项都是独立标签。
   } catch (_) { emit('list_error'); } finally { listBusy = false; } // 完整快照更新后释放枚举锁。
 } // 结束列表。
 async function probe(tabId, expectedUrl) { // 只在绑定或恢复时检查目标页面。
@@ -102,7 +102,7 @@ function connect() { // 连接软件内置桥接进程。
     port = current; // 保存当前连接。
     current.onMessage.addListener(msg => { command(msg).catch(() => fail('COMMAND_FAILED')); }); // 捕获异步错误。
     current.onDisconnect.addListener(() => { void chrome.runtime.lastError; if (port !== current) return; port = null; clearBinding(); clearInterval(pulse); pulse = null; }); // 助手退出后停止所有任务。
-    emit('hello', {version: '0.4.0', extensionVersion: '0.5.0', capabilities: ['web-session-v1']}); // 保留旧协议号，新能力须由桌面明确识别。
+    emit('hello', {version: '0.4.0', extensionVersion: '0.5.2', capabilities: ['web-daily-file-v1']}); // 保留旧协议号，新能力须由桌面明确识别。
     listTabs(); // 初次发送列表。
     pulse = setInterval(() => { emit('heartbeat'); }, 2000); // 仅本机心跳。
   } catch (_) { port = null; clearBinding(); } // 不静默恢复旧任务。
@@ -116,6 +116,7 @@ chrome.tabs.onRemoved.addListener((id, info) => { // 捕获真实标签关闭。
 }); // 完成关闭监听。
 chrome.tabs.onUpdated.addListener((id, change, tab) => { // 页面加载及地址变化。
   if (change.url && typeof webTargetChanged === 'function') void webTargetChanged(id, change.url); // 地址变更后等待用户重新绑定网页。
+  if ((change.frozen === false || change.status === 'complete') && typeof syncWebPage === 'function') void syncWebPage(id); // 唤醒后同步缓存，不额外请求平台。
   if (change.title || change.url || change.status === 'complete') listTabs(); // 更新下拉框。
   const state = binding; // 当前恢复会话。
   if (!state || state.id !== id) return; // 忽略其他标签。
@@ -128,3 +129,5 @@ chrome.action.onClicked.addListener(connect); // 扩展图标仅用于手动重�
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'desktop-connect') connect(); }); // 助手稍后启动时可连接。
 chrome.alarms.create('desktop-connect', {periodInMinutes: 0.5}); // 只尝试本机连接，不访问内网。
 connect(); // 安装或浏览器启动时连接本机助手。
+
+chrome.tabs.onActivated?.addListener(info => { if (typeof syncWebPage === 'function') void syncWebPage(info.tabId); }); // 用户唤醒页面后同步最近会话，保持当前焦点。

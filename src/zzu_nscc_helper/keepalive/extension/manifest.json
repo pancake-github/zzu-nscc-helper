@@ -1,18 +1,21 @@
 {
   "manifest_version": 3,
   "name": "SSL VPN 助手 · Edge 标签页连接器",
-  "version": "0.5.0",
-  "description": "郑州超算助手连接器：浏览器内真实会话交互与本机通信，不读取密码或导出Cookie。",
+  "version": "0.5.2",
+  "description": "郑州超算助手：VPN每13分钟；浏览器每日上传1KiB、校验并删除专用文件，凭据不出浏览器。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvoz+FFt1kJEhw7m16U4gN7IaXS8I9NfM3p7V6h20nXL/7f4rWOUvgIpZNjiwvYGEAbxP13qHwucO2UCLsB0/LfZOnvT2Y/pTOwMxLZsB1Ni6je3AKRRzL0zgO4DVugS1AFo6OBTGvBHpLUYY1zcTMuXnvC/9gwHCbj378k0GN0RjVzEOzFBSCFnpUyGI3uIe/sfb3a3dRyZwe7qGjsKSY2OOvM9IhOxfSBInr4EiRIPRevB6fmGtsaKv+1plPBOr7zutX7iVO89qr7ifhbSXty6OxTOev6wFbFSXJ/OZWbqcmdSURTk6bouZgsUcETRyz+3U6Y514u1cvvkvPi/GiQIDAQAB",
   "permissions": [
     "tabs",
     "nativeMessaging",
     "alarms",
     "webNavigation",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
-    "https://172.99.2.7/*"
+    "https://172.99.2.7/*",
+    "https://efile01.v.zzu.edu.cn/*",
+    "https://efile02.v.zzu.edu.cn/*"
   ],
   "background": {
     "service_worker": "worker.js"

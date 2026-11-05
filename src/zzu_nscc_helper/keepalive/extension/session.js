@@ -1,91 +1,125 @@
-let webBinding = null; // 网页会话独立于旧版标签恢复，不持久保存授权。
-function sessionTarget(raw) { // 仅允许三种已核对的超算业务页面。
-  try { const u = new URL(raw); return u.origin === 'https://172.99.2.7' && !u.username && !u.password && !u.search && /^\/ac\/console3\/index\.html(?:;jsessionid=[a-fA-F0-9]{32})?$/.test(u.pathname) && ['#/e-file', '#/space/dashboard', '#/space/shell'].includes(u.hash); } catch (_) { return false; } // 不扩大到登录页、工单或其他网站。
+let webBinding = null; // 绑定与响应仅在扩展内存保存，停止即释放。
+const webPageJobs = new Map(); // 冻结页面最多一个待执行脚本，不堆积注入。
+const WEB_API = 'https://172.99.2.7/ac/api/user/getCurrentUserInfo.action?includeToken=true&refresh=true'; // 平台自身的固定只读接口。
+const WEB_TRANSIENT = new Set(['WEB_TIMEOUT', 'WEB_NETWORK', 'WEB_SERVER_BUSY', 'WEB_RESPONSE_EMPTY', 'WEB_PAGE_NOT_READY', 'WEB_CLEANUP_PENDING', 'WEB_SERVICE_REJECTED']); // 暂态问题由桌面退避恢复。
+function sessionTarget(raw) { // 只接纳已核对的三个业务路由。
+  try { const u = new URL(raw); return u.origin === 'https://172.99.2.7' && !u.username && !u.password && !u.search && /^\/ac\/console3\/index\.html(?:;jsessionid=[a-fA-F0-9]{32})?$/.test(u.pathname) && ['#/e-file', '#/space/dashboard', '#/space/shell'].includes(u.hash); } catch (_) { return false; } // 不扩大到其他网站或登录页面。
 } // 结束目标检查。
-async function pageSessionRequest(expectedUrl) { // 此函数整体在目标网页主上下文执行，敏感响应留在网页内。
-  const started = performance.now(); // 单调时钟记录本次耗时。
-  const controller = new AbortController(); // 同时支持二十秒超时与桌面取消。
-  const key = '__zzuNsccSessionRequestV1'; // 仅在当前页面保存取消句柄。
-  if (window[key]) return {ok: false, error: 'WEB_BUSY'}; // 不并发访问会话接口。
-  window[key] = controller; // 只有本次控制器能提交返回的数据。
-  const timer = setTimeout(() => controller.abort(), 20000); // 包括响应读取的总期限。
-  let bytes = 0; // 只允许将响应长度传给桌面。
-  try { // 任何未知页面、认证或解析错误都不算成功。
-    if (location.href !== expectedUrl || location.origin !== 'https://172.99.2.7') throw new Error('WEB_TARGET_CHANGED'); // 注入前后的地址必须完全相同。
-    const store = window.app?.$store; // 使用平台自身现有状态容器，不读取 Cookie 或存储中的令牌。
-    const previous = store?.state?.user?.userInfo; // 只在页面内确认当前用户身份未切换。
-    if (!previous?.id || !Array.isArray(previous.roleId) || typeof store.commit !== 'function') throw new Error('WEB_PAGE_NOT_READY'); // 登录页或未初始化页面不能发请求。
-    const response = await fetch('/ac/api/user/getCurrentUserInfo.action?includeToken=true&refresh=true', {method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: {'Accept': 'application/json', 'Cache-Control': 'no-cache'}, signal: controller.signal}); // 复用平台前端真实只读接口，让浏览器自行携带本网站登录态。
-    if ([401, 403].includes(response.status)) throw new Error('WEB_LOGIN_EXPIRED'); // HTTP 认证失败单独分类。
-    if (response.status !== 200 || response.redirected || !/application\/json/i.test(response.headers.get('content-type') || '') || !response.body) throw new Error('WEB_RESPONSE_INVALID'); // 登录 HTML、空响应和非预期重定向一律失败。
-    const reader = response.body.getReader(); // 分块读取，限制响应体而非无限制 JSON 读取。
-    const decoder = new TextDecoder(); // 正确处理 UTF-8 多字节边界。
-    let text = ''; // 原始响应只存在本网页本次调用的内存中。
-    while (true) { const chunk = await reader.read(); if (chunk.done) break; bytes += chunk.value.byteLength; if (bytes > 65536) { await reader.cancel(); throw new Error('WEB_RESPONSE_TOO_LARGE'); } text += decoder.decode(chunk.value, {stream: true}); } // 读取上限64KiB。
-    text += decoder.decode(); // 完成字符解码。
-    if (!bytes) throw new Error('WEB_RESPONSE_EMPTY'); // 空响应不能续期成功。
-    const result = JSON.parse(text); // 不将正文或服务端错误文本输出到控制台或桌面。
-    if (['401', '403'].includes(String(result.code))) throw new Error('WEB_LOGIN_EXPIRED'); // 同时核对平台业务认证码。
-    const user = result.data; // 此对象可能包含令牌，只能留在网页内。
-    if (String(result.code) !== '0' || !user || String(user.id) !== String(previous.id) || !Array.isArray(user.roleId) || !Array.isArray(user.tokenList)) throw new Error('WEB_RESPONSE_INVALID'); // 成功码、当前用户及平台实际结构都必须匹配。
-    if (controller.signal.aborted || window[key] !== controller || location.href !== expectedUrl) throw new Error('WEB_CANCELLED'); // 取消或导航后不更新页面状态。
-    store.commit('SET_USER_INFO', user); // 与平台初始化相同的状态更新，使该页后续 E-File/E-Shell 请求采用返回的当前令牌。
-    return {ok: true, status: 200, bytes, elapsed: (performance.now() - started) / 1000}; // 只返回无账号、无令牌的技术摘要。
-  } catch (error) { // 不透传浏览器或服务端原始报错文本。
-    const known = ['WEB_BUSY', 'WEB_TARGET_CHANGED', 'WEB_PAGE_NOT_READY', 'WEB_LOGIN_EXPIRED', 'WEB_RESPONSE_INVALID', 'WEB_RESPONSE_TOO_LARGE', 'WEB_RESPONSE_EMPTY', 'WEB_CANCELLED']; // 有限错误类别。
-    return {ok: false, error: controller.signal.aborted ? 'WEB_CANCELLED_OR_TIMEOUT' : known.includes(error?.message) ? error.message : 'WEB_NETWORK_OR_PARSE', bytes, elapsed: (performance.now() - started) / 1000}; // 失败不自动重试。
-  } finally { clearTimeout(timer); if (window[key] === controller) delete window[key]; } // 保证取消句柄和定时器清理。
-} // 结束页面内真实交互。
-async function clearWebBinding() { // 停止只取消本软件正在进行的网页请求。
-  const previous = webBinding; webBinding = null; // 先撤销授权，迟到的结果不能恢复任务。
-  if (!previous?.busy) return; // 未发请求无需注入取消函数。
-  try { await chrome.scripting.executeScript({target: {tabId: previous.busy}, world: 'MAIN', func: () => { window.__zzuNsccSessionRequestV1?.abort(); }}); } catch (_) { /* 标签关闭时其请求已经随文档退出。 */ } // 不关闭标签或网页自身的其他请求。
-} // 结束取消。
-async function webCommand(msg) { // 网页交互仅由桌面授权命令触发，不在扩展内自动循环。
-  if (!['web_bind', 'web_request', 'web_stop'].includes(msg.command)) return false; // 保留旧版标签协议兼容。
-  if (msg.command === 'web_stop') { await clearWebBinding(); return true; } // 幂等停止。
-  if (msg.command === 'web_bind') { // 每次重新绑定都需要用户在助手内点击。
-    await clearWebBinding(); // 取消旧请求后才接纳新目标。
-    if (!Number.isInteger(msg.id) || !/^[a-f0-9]{32}$/.test(msg.token || '') || !sessionTarget(msg.url)) { emit('web_failed', {token: msg.token, code: 'WEB_TARGET_CHANGED'}); return true; } // 限定标签与本地随机授权标识。
-    const state = {token: msg.token, tabs: [], busy: null, running: false, lastRequest: 0}; webBinding = state; // 只在内存保存目标，不保存返回令牌。
-    try { // 精确核对选中的页面以及用户允许的同会话页面。
-      const selected = await chrome.tabs.get(msg.id); // 不依赖旧列表。
-      if (selected.incognito || selected.url !== msg.url || !sessionTarget(selected.url)) throw new Error(); // 拒绝过期选择。
-      const path = new URL(selected.url).pathname; // 会话参数仅用于当前浏览器内的同会话分组。
-      const all = msg.related === true ? await chrome.tabs.query({}) : [selected]; // 只有勾选同会话页面才加入其他业务标签。
-      state.tabs = all.filter(t => !t.incognito && sessionTarget(t.url) && new URL(t.url).pathname === path).map(t => ({id: t.id, url: t.url})); // 不接纳不同会话或其他站点。
-      if (!state.tabs.length || state.tabs.length > 10) throw new Error(); // 十个页面上限避免一次交互持续过久。
-      if (webBinding === state) emit('web_bound', {token: state.token, pages: state.tabs.length}); // 不把绑定成功当真实请求成功。
-    } catch (_) { if (webBinding === state) { await clearWebBinding(); emit('web_failed', {token: state.token, code: 'WEB_TARGET_CHANGED'}); } } // 不重试不自动打开标签。
-    return true; // 完成绑定命令。
+async function identityHash(value) { // 账户校验使用摘要，不经本机消息传输。
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value))); // 不读取密码或Cookie。
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''); // 摘要只留在浏览器内存。
+} // 结束摘要。
+async function pageSessionState(expectedUrl, deadline, expectedIdentity = null, user = null) { // 页面内仅检查与同步状态，绝不启动网络请求。
+  if (Date.now() >= deadline || location.href !== expectedUrl || location.origin !== 'https://172.99.2.7') return {ok: false}; // 冻结后迟到脚本不能应用旧结果。
+  const store = window.app?.$store, current = store?.state?.user?.userInfo; // 使用平台原有状态，不读取浏览器存储。
+  if (!current?.id || !Array.isArray(current.roleId) || typeof store.commit !== 'function') return {ok: false}; // 未登录页面不参与。
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(current.id))); // 不从页面导出原账号。
+  const identity = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''); // 固定长度身份摘要。
+  if (Date.now() >= deadline || location.href !== expectedUrl || String(store.state.user.userInfo?.id) !== String(current.id)) return {ok: false}; // 异步计算后再次核对。
+  if (expectedIdentity && identity !== expectedIdentity) return {ok: false, changed: true}; // 不把其他账户的数据写入本页。
+  if (user) store.commit('SET_USER_INFO', user); // 与平台初始化逻辑一致，服务令牌仅在浏览器内使用。
+  if (user) return {ok: true}; // 同步时不再读取集群元数据。
+  const cluster = store.getters?.efileServiceClusterId, home = store.getters?.clusterIdMap?.[cluster]?.clusterUserHomePath; // 用户实际选择集群对应的个人主目录。
+  if (!cluster || !home || typeof store.dispatch !== 'function') return {ok: false}; // 必要参数缺失不能猜测。
+  const service = await store.dispatch('GetServiceUrl', {clusterId: cluster, type: 'efileUrl'}); // E-File使用平台已选择服务地址，不触发文件操作。
+  if (Date.now() >= deadline || location.href !== expectedUrl || String(store.state.user.userInfo?.id) !== String(current.id)) return {ok: false}; // 等待期间改变身份则拒绝。
+  return {ok: true, identity, profile: {cluster: String(cluster), home, base: service.url}, user: current}; // 该结果只返回浏览器扩展，不返回桌面。
+} // 结束页面函数。
+async function boundedPage(target, state, user = null) { // 页面卡顿不阻塞后台HTTP。
+  const tab = await chrome.tabs.get(target.id); // 核实真实标签身份。
+  if (tab.url !== target.url || !sessionTarget(tab.url)) return {ok: false}; // 导航后不注入旧结果。
+  if (tab.frozen || tab.discarded || tab.status !== 'complete' || webPageJobs.has(target.id)) return {ok: false, deferred: true}; // 不强行激活或刷新业务页。
+  if (webBinding !== state) return {ok: false}; // 停止后不新增脚本。
+  const deadline = Date.now() + 8000; // 扩展赋予绝对期限，迟到执行也能识别。
+  const job = chrome.scripting.executeScript({target: {tabId: target.id}, world: 'MAIN', func: pageSessionState, args: [target.url, deadline, state.identity || null, user]}); // 请求不再依赖网页计时器。
+  webPageJobs.set(target.id, job); // 一个页面最多一个挂起注入。
+  const settled = job.then(results => results[0]?.result || {ok: false}, () => ({ok: false})).finally(() => { if (webPageJobs.get(target.id) === job) webPageJobs.delete(target.id); }); // 正常、失败均释放占用。
+  let timer; // 超时在扩展侧执行。
+  try { return await Promise.race([settled, new Promise(resolve => { timer = setTimeout(() => resolve({ok: false, deferred: true}), 8000); })]); } finally { clearTimeout(timer); } // 同步延期不冒充认证失败。
+} // 结束有界注入。
+async function syncWebPage(id) { // 页面恢复响应时应用最近服务器结果，不增加平台请求。
+  const state = webBinding, target = state?.tabs.find(tab => tab.id === id); // 仅授权集合。
+  if (!target || !state.latest || Date.now() - state.latest.at > 900000) return; // 不应用过期结果。
+  const latest = state.latest; // 当前唯一缓存，不写磁盘。
+  try { const result = await boundedPage(target, state, latest.user); if (webBinding === state && state.latest === latest && result.ok) { state.synced.add(id); emit('web_sync', {token: state.token, request: latest.request, pages: state.tabs.length, synced: state.synced.size}); } } catch (_) { /* 页面关闭或冻结留待下一轮，不记录原文。 */ } // 唤醒后的同步也即时更新桌面摘要。
+} // 结束唤醒同步。
+async function clearWebBinding() { // 取消不再依赖被冻结网页内的脚本。
+  const old = webBinding; webBinding = null; // 先撤销权限，迟到结果立即失效。
+  if (!old) return; // 幂等退出。
+  old.latest = null; old.controller?.abort(); // 清除缓存并取消扩展自己的fetch。
+  if (old.task) await old.task; // 旧网络任务结束后才允许重新绑定，不等待页面同步。
+} // 结束停止。
+async function runWebRequest(state, request) { // 每轮完整文件交互，桌面独立安排24小时间隔。
+  const started = performance.now(); // 单调时钟记录整轮耗时。
+  try { // 所有响应与凭据只留在浏览器内存。
+    if (!state.identity) { // 手动绑定时先确认当前页面身份和集群。
+      const result = await boundedPage(state.selected, state); // 页面冻结时有界等待后退避。
+      if (!result.ok || !/^[a-f0-9]{64}$/.test(result.identity || '') || !result.profile) throw new Error('WEB_PAGE_NOT_READY'); // 参数不明不发写请求。
+      state.identity = result.identity; state.profile = result.profile; state.user = result.user; // 后续请求不等待冻结页面渲染器。
+    } else { // 后续优先核对响应中的页面身份；冻结页不阻塞文件服务自己的认证。
+      const current = await boundedPage(state.selected, state); // 此处只有本地页面状态读取，没有HTTP。
+      if (current.changed || current.ok && current.identity !== state.identity) throw new Error('WEB_LOGIN_CHANGED'); // 页面明确换号立即停止。
+      if (current.ok) { if (JSON.stringify(current.profile) !== JSON.stringify(state.profile)) throw new Error('WEB_TARGET_CHANGED'); state.user = current.user; } // 不悄悄切换集群或目录。
+    } // 结束初次授权信息解析。
+    dailyActive(state); // 初始化期间停止则不联网。
+    emit('web_progress', {token: state.token, request, stage: 'identity'}); // 固定阶段无敏感资料。
+    let user = state.user; // 使用当前网页已经取得的服务凭据，绝不传给桌面。
+    if (!user?.id || !Array.isArray(user.roleId) || !Array.isArray(user.tokenList)) throw new Error('WEB_RESPONSE_INVALID'); // 不把登录HTML当数据。
+    if (await identityHash(user.id) !== state.identity) throw new Error('WEB_LOGIN_CHANGED'); // 当前登录身份变化不自动接管遗留文件。
+    try { await dailyTransaction(state, request, user); } catch (error) { // 文件服务初始化实际验证身份，不把静态页面当认证成功。
+      if (error?.message !== 'WEB_LOGIN_EXPIRED') throw error; // 普通失败由事务恢复，不刷新登录凭据。
+      try { user = await dailyFetch(state, WEB_API); } catch (_) { throw new Error('WEB_LOGIN_EXPIRED'); } // 仅必要时尝试平台原会话接口，TLS或认证失败不绕过。
+      if (!user?.id || !Array.isArray(user.roleId) || !Array.isArray(user.tokenList) || await identityHash(user.id) !== state.identity) throw new Error('WEB_LOGIN_CHANGED'); // 新凭据仍必须属于原身份。
+      state.user = user; await dailyTransaction(state, request, user); // 同一事务记录继续，不生成第二个文件。
+    } // 上传、完整读回、删除与确认不存在全部完成才成功。
+    dailyActive(state); // 取消中的成功不续期。
+    state.latest = {user, at: Date.now(), request}; state.synced = new Set(); // 页面恢复响应后同步，不再发网络请求。
+    emit('web_success', {token: state.token, request, pages: state.tabs.length, bytes: 1024, elapsed: (performance.now() - started) / 1000, synced: 0, daily: true, cleanup: 'confirmed'}); // 桌面仅接收明确的完整事务摘要。
+    void Promise.all(state.tabs.map(tab => syncWebPage(tab.id))); // 页面同步与服务器文件事务分开执行。
+  } catch (error) { // 不透传异常原文、账号、路径或令牌。
+    if (webBinding !== state || state.cancelled) return; // 取消由单独事件确认。
+    const known = ['WEB_PAGE_NOT_READY', 'WEB_LOGIN_EXPIRED', 'WEB_LOGIN_CHANGED', 'WEB_TARGET_CHANGED', 'WEB_SERVER_BUSY', 'WEB_RESPONSE_INVALID', 'WEB_RESPONSE_TOO_LARGE', 'WEB_RESPONSE_EMPTY', 'WEB_TIMEOUT', 'WEB_SERVICE_UNSUPPORTED', 'WEB_OWNERSHIP_UNCONFIRMED', 'WEB_FILE_MISMATCH', 'WEB_CLEANUP_PENDING', 'WEB_SERVICE_REJECTED']; // 固定错误类型。
+    const code = known.includes(error?.message) ? error.message : 'WEB_NETWORK'; // 未知网络错误不泄漏网址。
+    state.controller?.abort(); // 先结束当前请求，再由桌面退避。
+    if (!WEB_TRANSIENT.has(code)) { state.latest = null; webBinding = null; } // 明确身份或归属不符需要手动处理。
+    emit('web_failed', {token: state.token, request, code, settled: true, diagnostic: ['fetch', 'body', 'profile', 'journal'].includes(state.diagnostic) ? state.diagnostic : 'binding', errorKind: ['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError', 'Error'].includes(error?.name) ? error.name : 'Other'}); // 未完成文件日志保留用于下次核对。
+  } finally { state.controller = null; } // 单轮结束释放当前网络句柄。
+} // 结束每日请求。
+async function webCommand(msg) { // 桌面统一安排所有实际请求时刻。
+  if (!['web_bind', 'web_request', 'web_cancel', 'web_stop'].includes(msg.command)) return false; // 兼容原基础协议。
+  if (msg.command === 'web_stop') { await clearWebBinding(); return true; } // 停止后不自动恢复。
+  if (msg.command === 'web_cancel') { // 桌面总截止时先确认旧请求取消。
+    const state = webBinding; // 不影响其他绑定或后续轮次。
+    if (state && state.token === msg.token && state.lastRequest === msg.request) { state.cancelled = true; state.controller?.abort(); if (state.task) await state.task; if (webBinding === state) emit('web_cancelled', {token: state.token, request: msg.request}); } // 不等待冻结页面取消脚本。
+    return true; // 完成取消确认。
+  } // 结束取消分支。
+  if (msg.command === 'web_bind') { // 仅用户显式绑定才接纳新页面。
+    await clearWebBinding(); // 旧网络任务终止后再接纳新请求。
+    if (msg.protocol !== 3 || !Number.isInteger(msg.id) || !/^[a-f0-9]{32}$/.test(msg.token || '') || !sessionTarget(msg.url)) { emit('web_failed', {token: msg.token, code: 'WEB_TARGET_CHANGED'}); return true; } // 老桌面不能误判新版成功含义。
+    const state = {token: msg.token, tabs: [], selected: null, identity: null, latest: null, synced: new Set(), controller: null, task: null, lastRequest: 0, cancelled: false}; webBinding = state; // 不保存账号配置。
+    try { // 使用当前实际标签，非旧列表。
+      const selected = await chrome.tabs.get(msg.id); // 核对用户选择。
+      if (selected.incognito || selected.url !== msg.url || !sessionTarget(selected.url)) throw new Error(); // 拒绝已导航或隐私窗口。
+      const all = msg.related === true ? await chrome.tabs.query({}) : [selected]; // 只有勾选后才加入相关业务页。
+      state.tabs = all.filter(tab => !tab.incognito && sessionTarget(tab.url) && new URL(tab.url).pathname === new URL(selected.url).pathname).map(tab => ({id: tab.id, url: tab.url})); // 同登录路径，不跨会话。
+      state.selected = state.tabs.find(tab => tab.id === msg.id); // 初次验证以用户选择页为准。
+      if (!state.selected || state.tabs.length > 10) throw new Error(); // 十页范围上限。
+      if (webBinding === state) emit('web_bound', {token: state.token, pages: state.tabs.length}); // 绑定并非实际网络成功。
+    } catch (_) { if (webBinding === state) { webBinding = null; emit('web_failed', {token: state.token, code: 'WEB_TARGET_CHANGED'}); } } // 无合法目标不联网。
+    return true; // 完成绑定。
   } // 结束绑定分支。
-  const state = webBinding; // 固定本轮授权身份。
-  if (!state || msg.token !== state.token || state.running || !Number.isSafeInteger(msg.request) || msg.request <= state.lastRequest) return true; // 并发、旧消息和重复编号全部忽略。
-  state.lastRequest = msg.request; state.running = true; // 单调编号去重，不积累历史集合。
-  let pages = 0, bytes = 0, elapsed = 0; // 仅累计无敏感信息的摘要。
-  try { // 每页实际交互一次；任一失败停止本轮网页维护。
-    for (const target of state.tabs) { // 所有页面顺序执行，不发送并发会话刷新。
-      if (webBinding !== state) return true; // 桌面取消后不发下一请求。
-      const tab = await chrome.tabs.get(target.id); // 导航、关闭和休眠未加载页面都不冒充在线。
-      if (tab.url !== target.url || tab.status !== 'complete' || !sessionTarget(tab.url)) throw new Error('WEB_TARGET_CHANGED'); // 不采用新登录态自动重绑。
-      state.busy = target.id; // 取消命令只针对当前这页的专用请求。
-      const results = await chrome.scripting.executeScript({target: {tabId: target.id}, world: 'MAIN', func: pageSessionRequest, args: [target.url]}); // 浏览器原有 TLS 与认证处理，不关闭证书检查。
-      state.busy = null; // 本页请求已结束。
-      if (webBinding !== state) return true; // 丢弃停止后迟到结果。
-      const result = results[0]?.result; // 只接受函数返回的最小摘要。
-      if (result?.ok !== true || result.status !== 200 || !(result.bytes > 0 && result.bytes <= 65536)) throw new Error(result?.error || 'WEB_RESPONSE_INVALID'); // 不把执行脚本成功当网络成功。
-      pages += 1; bytes += result.bytes; elapsed += result.elapsed; // 汇总真实成功页面。
-    } // 结束逐页交互。
-    if (webBinding === state) emit('web_success', {token: state.token, request: msg.request, pages, bytes, elapsed}); // 不发送响应正文、帐号或令牌。
-  } catch (error) { // 失败只通知一次，后续必须用户重新绑定。
-    if (webBinding === state) { await clearWebBinding(); emit('web_failed', {token: state.token, code: /^WEB_[A-Z_]+$/.test(error?.message || '') ? error.message : 'WEB_TARGET_CLOSED', pages}); } // 有限错误且不透传网址。
-  } finally { state.running = false; } // 释放本轮状态。
-  return true; // 命令已消费。
-} // 结束网页命令处理。
-async function webTargetChanged(id, newUrl) { // 标签关闭或导航立即撤销网页授权，不影响桌面VPN。
-  const state = webBinding; // 固定旧授权以免异步撤销新任务。
-  const target = state?.tabs.find(tab => tab.id === id); // 只检查用户本次选中的页面集合。
-  if (!target || newUrl === target.url) return; // 标题变化与无关标签不影响。
-  await clearWebBinding(); // 先取消本次专用请求，不自动刷新或重开。
-  emit('web_failed', {token: state.token, code: newUrl ? 'WEB_TARGET_CHANGED' : 'WEB_TARGET_CLOSED'}); // 返回固定类别即可。
-} // 结束页面生命周期处理。
+  const state = webBinding; // 当前授权。
+  if (!state || state.token !== msg.token || state.task || !Number.isSafeInteger(msg.request) || msg.request <= state.lastRequest) return true; // 拒绝重复、过期或并发指令。
+  state.lastRequest = msg.request; state.cancelled = false; // 本轮拥有独立编号。
+  const task = runWebRequest(state, msg.request); state.task = task; // 保存真实任务供取消等待。
+  try { await task; } finally { if (state.task === task) state.task = null; } // 确认结束后才接受重试。
+  return true; // 完成请求命令。
+} // 结束网页调度。
+async function webTargetChanged(id, newUrl) { // 只移除关闭的页面，不连带停止其他已绑定页。
+  const state = webBinding, target = state?.tabs.find(tab => tab.id === id); // 仅授权集合。
+  if (!target || newUrl === target.url) return; // 标题变化不影响。
+  if (newUrl && sessionTarget(newUrl) && new URL(newUrl).pathname === new URL(target.url).pathname) { target.url = newUrl; return; } // 同会话业务路由切换继续维护。
+  state.tabs = state.tabs.filter(tab => tab.id !== id); state.synced.delete(id); // 只撤销离开的页。
+  if (!state.tabs.length) { await clearWebBinding(); emit('web_failed', {token: state.token, code: newUrl ? 'WEB_TARGET_CHANGED' : 'WEB_TARGET_CLOSED'}); } // 最后一页关闭才停止网页通道。
+  else { if (state.selected.id === id) state.selected = state.tabs[0]; emit('web_targets', {token: state.token, pages: state.tabs.length}); } // 其他页面继续，不重开旧地址。
+} // 结束目标生命周期。

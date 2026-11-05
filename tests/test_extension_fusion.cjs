@@ -32,8 +32,8 @@ function sessionFixture(url) { // 每个用例独占状态，禁止调用真实�
   return state; // 不向调用者暴露真实用户数据。
 } // 结束会话测试环境。
 (async () => { // 与历史回归分离，完整验证会话地址兼容边界。
-  assert.equal(manifest.version, '0.5.0'); // 修复版本应在Edge扩展管理页可辨认。
-  assert.deepEqual(manifest.host_permissions, ['https://172.99.2.7/*']); // 不扩大站点访问权限。
+  assert.equal(manifest.version, '0.5.2'); // 修复版本应在Edge扩展管理页可辨认。
+  assert.deepEqual(manifest.host_permissions, ['https://172.99.2.7/*', 'https://efile01.v.zzu.edu.cn/*', 'https://efile02.v.zzu.edu.cn/*']); // 仅增加本平台两个已知文件服务。
   let f = sessionFixture(base + suffix + '#/e-file'); // 首个虚拟E-File标签。
   const accepted = [base + '#/e-file', base + '#/space/dashboard', base + suffix + '#/e-file', base + suffix.toLowerCase() + '#/space/dashboard']; // 新旧入口及会话大小写均支持。
   for (const url of accepted) assert.equal(f.allowed(url), true); // 只验证合成或公开地址。
