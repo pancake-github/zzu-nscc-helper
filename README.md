@@ -1,14 +1,42 @@
 # 郑州超算助手 · ZZU NSCC Helper
 
-**VPN 13 分钟 + 网页 24 小时**：手动开始后先执行一轮1KiB上传、完整读回校验、删除并确认不存在；完整成功后等待一天。VPN原有780秒周期保持不变。详见[维护策略](docs/WEB_SESSION.md)。
+使用郑州超算时，VPN 空闲断开、隔天网页会话失效、Clash 分流配置冲突，以及文件传输和校验繁琐，都会打断日常工作。**郑州超算助手**将连接维护、Clash 分流和 SFTP 上传下载整合到一个中文 Windows 桌面应用中，让这些重复操作更容易管理。
 
-**每日维护测试版 `v0.5.0-beta.4`：同时维护 VPN 流量与已登录网页会话，两种安装器均内置 Edge 扩展 0.5.2。** [下载页面与已知限制](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.4) · [在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-online-0.5.0-beta.4-x64.exe) · [完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-offline-0.5.0-beta.4-x64.exe)。本版为预发布测试版，实测范围见[安装说明](docs/INSTALLATION.md)。
+**非官方项目，仅适用于本项目说明的郑州超算平台 SSL VPN 接入环境，不适用于其他超算中心。** 使用前需要自己的有效平台账号，并先安装、登录平台 VPN。
 
-新版支持带 `;jsessionid=…` 的 E-File、计算服务和命令行页面。旧版用户从托盘退出助手后覆盖升级，Edge 首次使用仍需手动加载安装目录内的扩展，升级后重新加载一次，确认扩展为 0.5.2。无需单独安装补丁，见[安装说明](docs/INSTALLATION.md)。
+## 从这些常见问题出发
 
-**仅适用于本项目说明的郑州超算平台 SSL VPN 接入环境。非官方项目，不适用于其他超算中心。**
+- **电脑还开着，VPN 却断了。** 根据当前平台客服反馈，没有数据传输约 15 分钟会断开；仅保持浏览器打开，不一定有持续的有效流量。
+- **VPN 有流量，网页却提示会话失效。** VPN 连接与网页登录态需要分别维护，单独保住 VPN 流量不能代表网页会话也已更新。
+- **同时使用 Clash 和超算 VPN，分流难配置。** 系统代理、TUN、DNS 各有作用，本机端口和 VPN 网卡也可能不同，直接照搬他人的配置容易出错。
+- **上传下载后，还要核对文件是否完整。** 批量文件、同名保护和校验结果需要清楚记录，避免把“传完了”直接当成“已校验”。
 
-郑州超算平台专用 Windows 助手：SSL VPN 保活、Clash Verge Rev 自适应分流及 SFTP 上传下载。支持按需安装、配置备份回滚和文件校验。
+## 我们如何解决
+
+| 您需要解决的问题 | 助手提供的方式 |
+| --- | --- |
+| VPN 因长时间没有流量而断开 | 独立 HTTPS 通道首次成功后，每 **13 分钟**进行一次真实内网传输，检查 TLS、响应和 VPN 路由。 |
+| 网页长期没有业务交互 | 使用当前浏览器登录态，在随机助手专用目录完成 **1 KiB 上传 → 完整读回校验 → 删除 → 确认不存在**；首次手动开始执行一轮，完整成功后等待 **24 小时**。 |
+| Clash 与超算 VPN 的分流配置 | 检测实际端口、控制器和 VPN 网卡，针对本平台生成精确规则，提供改动预览、备份和回滚。 |
+| 超算文件上传下载与核验 | 中文 SFTP 界面支持文件和目录传输、同名保护、进度和回执；上传后完整读回并核对 SHA-256。 |
+
+可只安装保活、分流或 SFTP，也可以任意组合；安装后无需自行配置 Python。正常运行时驻留托盘，任务由您手动开始和停止。网页暂时失败会退避重试，明确登录失效时提醒处理，VPN 通道仍可独立运行。详细行为见[维护策略](docs/WEB_SESSION.md)与[组件安装说明](docs/INSTALLATION.md)。
+
+## 已经测试，并持续更新
+
+当前版本已通过自动回归、在线与离线共 **14 种组件安装组合**、公开下载资产 SHA-256 核验，并在实际超算平台完成安装版的 **上传、读回校验、删除和清理确认**；VPN 的约 13 分钟间隔传输也已实际验证。结果与限制公开保存在[阶段验收记录](docs/STAGES.md)。
+
+项目会结合实际使用反馈持续修复和更新。目前仍为**测试版**：24 小时调度已通过模拟时钟验证，真实跨日效果尚未完成验证，各模块的实机覆盖范围以验收记录为准；不承诺绕过平台的强制登录期限或让终端连接永不失效。
+
+## 请确保您使用的是最新发布版本
+
+安装、升级或遇到问题时，请先查看 [GitHub Releases](https://github.com/pancake-github/zzu-nscc-helper/releases)，核对**主程序与配套 Edge 扩展**版本。旧安装包或旧扩展可能缺少最新修复；仓库源码已更新也不等于本机已经升级。
+
+当前发布：**`v0.5.0-beta.4`（界面 `0.5.0b4`），内置扩展 `0.5.2`**。
+
+**[在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-online-0.5.0-beta.4-x64.exe)** · **[完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-offline-0.5.0-beta.4-x64.exe)** · [本版发布说明](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.4)
+
+两种安装器均已包含配套扩展，无需另装补丁。旧版用户从托盘退出助手后覆盖升级；Edge 首次使用需手动加载安装目录中的扩展，升级后重新加载一次并核对版本。支持带会话参数的 E-File、计算服务和命令行页面，具体步骤见[安装说明](docs/INSTALLATION.md)。
 
 关键词：郑州超算、国家超级计算郑州中心、SSL VPN、VPN保活、Clash Verge Rev、Mihomo、SFTP、Windows。
 
