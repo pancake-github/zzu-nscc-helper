@@ -7,6 +7,7 @@ function emit(event, data = {}) { // 只向本机桌面程序发送。
   if (port) { try { port.postMessage({event, ...data}); } catch (_) { clearBinding(); } } // 连接错误撤销恢复权限。
 } // 结束发送。
 function clearBinding() { // 所有停止路径统一撤销。
+  if (typeof clearWebBinding === 'function') void clearWebBinding(); // 失联或旧客户端停止时同时撤销网页交互。
   binding = null; // 失联后禁止重开网页。
   clearTimeout(recoveryTimer); // 不执行旧恢复回调。
   recoveryTimer = null; // 清空定时器引用。
@@ -24,7 +25,7 @@ function safeTarget(url) { // 只允许已知超算入口及平台会话地址�
   } catch (_) { return false; } // 非法地址不能绑定或恢复。
 } // 结束地址检查。
 function compact(tab) { // 只保留桌面选择所需元数据。
-  return {id: tab.id, windowId: tab.windowId, title: (tab.title || '无标题').slice(0, 200), url: (tab.url || '').slice(0, 2048), status: tab.status || 'loading', eligible: safeTarget(tab.url || '')}; // 不读取 Cookie。
+  return {id: tab.id, windowId: tab.windowId, title: (tab.title || '无标题').slice(0, 200), url: (tab.url || '').slice(0, 2048), status: tab.status || 'loading', eligible: safeTarget(tab.url || ''), sessionEligible: typeof sessionTarget === 'function' && sessionTarget(tab.url || '')}; // 网页功能单独声明资格，不改变旧客户端的恢复范围。
 } // 结束结构转换。
 async function listTabs() { // 列出真实标签页而非窗口标题。
   if (!port || listBusy) return; // 无助手则不枚举。
@@ -55,6 +56,7 @@ async function recovered(state) { // 恢复完成后重新验证页面。
 } // 结束恢复检查。
 async function command(msg) { // 桌面发出的有限命令。
   if (!msg || typeof msg.command !== 'string') return; // 拒绝无效输入。
+  if (typeof webCommand === 'function' && await webCommand(msg)) return; // 网页请求由新版专用命令处理，旧版绑定继续兼容。
   if (msg.command === 'list') { await listTabs(); return; } // 刷新列表。
   if (msg.command === 'stop') { clearBinding(); return; } // 手动停止立即撤销。
   if (msg.command === 'focus' && Number.isInteger(msg.id)) { // 定位真正的标签页。
@@ -100,18 +102,20 @@ function connect() { // 连接软件内置桥接进程。
     port = current; // 保存当前连接。
     current.onMessage.addListener(msg => { command(msg).catch(() => fail('COMMAND_FAILED')); }); // 捕获异步错误。
     current.onDisconnect.addListener(() => { void chrome.runtime.lastError; if (port !== current) return; port = null; clearBinding(); clearInterval(pulse); pulse = null; }); // 助手退出后停止所有任务。
-    emit('hello', {version: '0.4.0'}); // 初次握手。
+    emit('hello', {version: '0.4.0', extensionVersion: '0.5.0', capabilities: ['web-session-v1']}); // 保留旧协议号，新能力须由桌面明确识别。
     listTabs(); // 初次发送列表。
     pulse = setInterval(() => { emit('heartbeat'); }, 2000); // 仅本机心跳。
   } catch (_) { port = null; clearBinding(); } // 不静默恢复旧任务。
 } // 结束连接。
 chrome.tabs.onRemoved.addListener((id, info) => { // 捕获真实标签关闭。
+  if (typeof webTargetChanged === 'function') void webTargetChanged(id, null); // 新版仅停止网页维护，由桌面保留VPN。
   if (!binding || binding.id !== id) { listTabs(); return; } // 无关页面不影响绑定。
   if (info.isWindowClosing || binding.recovering) { fail('BROWSER_WINDOW_CLOSED'); return; } // 不反复恢复或重开窗口。
   binding.windowId = info.windowId; binding.recovering = true; binding.attempted = false; // 等待桌面同意单次恢复。
   emit('closed', {token: binding.token}); // 先暂停计时。
 }); // 完成关闭监听。
 chrome.tabs.onUpdated.addListener((id, change, tab) => { // 页面加载及地址变化。
+  if (change.url && typeof webTargetChanged === 'function') void webTargetChanged(id, change.url); // 地址变更后等待用户重新绑定网页。
   if (change.title || change.url || change.status === 'complete') listTabs(); // 更新下拉框。
   const state = binding; // 当前恢复会话。
   if (!state || state.id !== id) return; // 忽略其他标签。

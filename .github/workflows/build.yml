@@ -54,6 +54,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/test_extension_fusion.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/test_web_session.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install verified Inno Setup in disposable runner
         shell: pwsh
         run: |
@@ -194,10 +196,10 @@ jobs:
           base = '/repos/' + repo # 固定项目接口前缀。
           run = call('GET', base + '/actions/runs/' + run_id) # 以GitHub实际状态核验来源。
           assert run['head_sha'] == source and run['conclusion'] == 'success' and run['status'] == 'completed' and run['repository']['full_name'] == repo # 失败候选不能发布。
-          notes = '本版的完整离线安装包和在线安装器均直接包含 Edge 连接组件 0.4.1，兼容平台带会话参数的 E-File / 计算服务地址，无需另装补丁。\n\n主程序版本 ' + version + '，扩展版本 0.4.1，通信协议保持0.4.0。支持保活、分流、SFTP任意非空组件组合。升级前退出助手，运行新版安装器；首次使用仍需在Edge加载安装目录内扩展，已有用户升级后重新加载一次。\n\n本轮验证：在线、离线各7种安装组合，实际扩展版本和脚本哈希、两种安装器覆盖合成旧扩展、添加组件、保留私有数据、坏载荷拒绝均通过。发布前在线矩阵使用固定哈希缓存；公网下载安装由发布后独立工作流验证。\n\n仍为非官方测试版，仅适用于本项目说明的郑州超算平台。未完成的真实SFTP、Clash应用回滚、标签恢复/失败终止验收仍保留为已知限制。本轮没有重做长期保活或干净Windows11测试，不将历史beta.1结果冒充本轮通过。安装器未作Authenticode签名，请核对SHA256SUMS.txt。\n\n来源提交：`' + source + '`；构建：`' + run_id + '`。GPL-3.0，包内附许可证、依赖及对应源码信息。\n' # 仅公开技术信息。
+          notes = pathlib.Path('docs/WEB_SESSION.md').read_text(encoding='utf-8') + '\n\n来源提交：`' + source + '`；构建：`' + run_id + '`。在线、离线14种组件组合已通过构建验收；公网下载安装由发布后独立工作流验证。真实长期、SFTP、Clash等未完成项目不沿用历史通过结论。安装器未签名，请核对SHA256SUMS.txt。\n' # 仅公开技术说明和实际构建证据。
           existing = [r for r in call('GET', base + '/releases?per_page=100') if r['tag_name'] == tag] # 重入不重复创建。
           assert len(existing) <= 1 # 歧义时不修改已有发布。
-          release = existing[0] if existing else call('POST', base + '/releases', {'tag_name':tag,'target_commitish':source,'name':'郑州超算助手 ' + tag + ' · 内置扩展0.4.1','body':notes,'draft':True,'prerelease':True,'make_latest':'false'}) # 所有资产完成前保持草稿。
+          release = existing[0] if existing else call('POST', base + '/releases', {'tag_name':tag,'target_commitish':source,'name':'郑州超算助手 ' + tag + ' · 网页与VPN双通道','body':notes,'draft':True,'prerelease':True,'make_latest':'false'}) # 所有资产完成前保持草稿。
           assert release['target_commitish'] == source and release['prerelease'] # 不能覆盖其他版本。
           assets = {a['name']:a for a in call('GET', base + '/releases/' + str(release['id']) + '/assets')} # 已有资产必须完全匹配。
           assert not (set(assets) - set(expected)) # 不删除未知文件。

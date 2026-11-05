@@ -17,6 +17,7 @@ PROJECT_FILES |= frozenset(('scripts/check_link_permissions.py', 'src/zzu_nscc_h
 PROJECT_FILES |= frozenset(('scripts/lock_build.py', 'packaging/requirements-build.lock'))  # 构建依赖的公开固定版本与官方轮子哈希。
 PROJECT_FILES |= frozenset(('src/zzu_nscc_helper/keepalive/acceptance.py',))  # 明确调用的冻结程序持续验收入口。
 PROJECT_FILES |= frozenset(('packaging/runtime-sources.json',))  # 官方运行库对应源码地址及已核验哈希。
+PROJECT_FILES |= frozenset(('src/zzu_nscc_helper/keepalive/dual_session.py', 'src/zzu_nscc_helper/keepalive/extension/session.js', 'src/zzu_nscc_helper/keepalive/extension/worker.js', 'tests/test_web_session.cjs', 'tests/test_dual_session.py', 'docs/WEB_SESSION.md'))  # 网页会话功能的精确公开集合。
 PRIVATE_KEY = re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----')  # 不将公开SSH公钥误判为私钥。
 GITHUB_TOKEN = re.compile(r'\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b')  # 只检测形式，不输出匹配内容。
 PERSONAL_PATH = re.compile(r'[A-Za-z]:[\\/](?:Users[\\/][^\\/\s\"\']+|ANACONDA3)(?:[\\/]|\b)', re.IGNORECASE)  # 排除用户目录和本机环境根路径。

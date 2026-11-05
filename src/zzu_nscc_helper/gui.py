@@ -349,7 +349,7 @@ class MainWindow(QMainWindow):  # 三组件共用一个托盘和生命周期。
         self.tabs = QTabWidget()  # 已安装组件页。
         layout.addWidget(self.tabs)  # 主功能区域。
         if 'keepalive' in self.components:  # 仅此组件需要Edge连接器。
-            from .keepalive.tab_app import TabWindow  # 懒加载保活模块。
+            from .keepalive.dual_session import DualSessionWindow as TabWindow  # 懒加载保活模块。
             self.keepalive = TabWindow(connect=not preview)  # 预览不注册原生组件。
             self.keepalive.can_start = lambda: not self.preview_mode and not self.mutating()  # 源码模式同样执行真实互斥。
             self.keepalive.tray.hide()  # 使用统一托盘。

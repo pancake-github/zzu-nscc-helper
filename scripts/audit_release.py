@@ -16,7 +16,8 @@ def extension_payload(folder, manifest):  # 安装器与独立扩展包必须携
         return None  # 历史材料保持原有审核范围。
     prefix = 'modules/zzu_nscc_helper/keepalive/extension/'  # 两种安装器最终落盘位置。
     with zipfile.ZipFile(folder / 'keepalive.zip') as payload, zipfile.ZipFile(folder / ('zzu-nscc-helper-edge-' + manifest['version'] + '.zip')) as standalone:  # 核对实际分发内容。
-        files = {name: payload.read(prefix + name) for name in ('manifest.json', 'background.js')}  # 包内两项关键文件。
+        names = ('manifest.json', 'background.js', 'session.js', 'worker.js') if expected == '0.5.0' else ('manifest.json', 'background.js')  # 新版网页模块也必须在两种分发包完全一致。
+        files = {name: payload.read(prefix + name) for name in names}  # 不能只更新版本而遗漏网页请求模块。
         if json.loads(files['manifest.json'])['version'] != expected: raise ValueError('EXTENSION_VERSION_MISMATCH')  # 不能只改外层版本标签。
         if any(standalone.read(name) != content for name, content in files.items()): raise ValueError('EXTENSION_ASSET_MISMATCH')  # 独立包与安装载荷必须一致。
     return {'version': expected, 'sha256': {name: hashlib.sha256(content).hexdigest() for name, content in files.items()}}  # 可供真实安装后再次比对。
