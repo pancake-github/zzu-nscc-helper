@@ -1,8 +1,8 @@
 # 郑州超算助手 · ZZU NSCC Helper
 
-**整合测试版 `v0.5.0-beta.2`：两种安装器均包含 Edge 连接组件 0.4.1，无需另装补丁。** [下载页面与已知限制](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.2) · [在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.2/zzu-nscc-helper-online-0.5.0-beta.2-x64.exe) · [完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.2/zzu-nscc-helper-offline-0.5.0-beta.2-x64.exe)。本版为预发布测试版，实测范围见[安装说明](docs/INSTALLATION.md)。
+**双通道测试版 `v0.5.0-beta.3`：同时维护 VPN 流量与已登录网页会话，两种安装器均内置 Edge 扩展 0.5.0。** [下载页面与已知限制](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.3) · [在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.3/zzu-nscc-helper-online-0.5.0-beta.3-x64.exe) · [完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.3/zzu-nscc-helper-offline-0.5.0-beta.3-x64.exe)。本版为预发布测试版，实测范围见[安装说明](docs/INSTALLATION.md)。
 
-新版已整合带 `;jsessionid=…` 的 E-File / 计算服务地址兼容修复。选择新版在线或离线安装器即可；旧版用户直接覆盖升级。Edge 首次使用仍需手动加载安装目录内的扩展，升级后重新加载一次，见[安装说明](docs/INSTALLATION.md)。
+新版支持带 `;jsessionid=…` 的 E-File、计算服务和命令行页面。旧版用户从托盘退出助手后覆盖升级，Edge 首次使用仍需手动加载安装目录内的扩展，升级后重新加载一次，确认扩展为 0.5.0。无需单独安装补丁，见[安装说明](docs/INSTALLATION.md)。
 
 **仅适用于本项目说明的郑州超算平台 SSL VPN 接入环境。非官方项目，不适用于其他超算中心。**
 
@@ -10,13 +10,17 @@
 
 关键词：郑州超算、国家超级计算郑州中心、SSL VPN、VPN保活、Clash Verge Rev、Mihomo、SFTP、Windows。
 
-## 双通道改进（beta.3 开发验收中）
+## 双通道保活
 
-新增浏览器内真实认证请求，并更新每个选中业务页的会话状态。VPN流量与网页会话分别计数；网页失效或关闭浏览器后，VPN继续运行，用户可重新绑定网页。新模式覆盖 E-File、计算服务和命令行页面，详细请求与隐私边界见[网页会话说明](docs/WEB_SESSION.md)。当前下载链接仍指向已经发布的 beta.2，beta.3 安装包完成验证后再更新。
+浏览器内执行真实认证 GET，并更新每个选中业务页的会话状态；VPN 独立请求和网页请求各自在成功后等待 13 分钟。默认维护绑定时已打开、属于同一登录会话的 E-File、计算服务和命令行页面。网页失效、关闭或需要重新登录时，只暂停网页维护并提醒，VPN 继续运行；重新登录后手动重新绑定即可。两条通道分别显示成功时间和次数，详细请求与隐私边界见[网页会话说明](docs/WEB_SESSION.md)。
 
 ## 当前实际状态
 
-当前整合版本为 **0.5.0-beta.2**，内置扩展 **0.4.1**，连接协议仍为 **0.4.0**。统一中文界面、独立后台进程、真实保活入口、SFTP上传下载界面，以及Clash检测、预览、事务应用和回滚均已接入。尚未完成的实机项目在下文和发布说明中保留，不标为稳定版。
+当前整合版本为 **0.5.0-beta.3**（界面 **0.5.0b3**），内置扩展 **0.5.0**；基础连接协议保持 **0.4.0**，新网页功能另行核对能力字段。统一中文界面、独立后台进程、真实保活入口、SFTP上传下载界面，以及Clash检测、预览、事务应用和回滚均已接入。尚未完成的实机项目在下文和发布说明中保留，不标为稳定版。
+
+beta.3 [构建 41971147570](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/41971147570)通过在线、离线共 14 种组件组合及升级保护检查。本轮源码在真实平台连续运行超过 15 分钟，VPN 和两个业务页均完成第 0、13 分钟两轮交互；网页认证响应验证及页面状态更新成功。该记录不等于隔天持续运行或所有模块均已实测，最新安装与分发结果见[阶段记录](docs/STAGES.md)。
+
+beta.3 [公开下载与在线安装复核](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/41972872261)已通过：公开资产匿名回读、哈希和包内审核，以及在线安装器真实下载三组件、安装、自检、GUI启动和卸载。所有保活安装均确认为扩展0.5.0。
 
 此前 **v0.5.0-beta.1** 已在本机 Windows 11 完成安装、升级、组件迁移和卸载入口核查；额外干净 Windows 11 虚拟机验收按维护者要求跳过，未记为通过。该历史版本来自构建 `39913823258`、源码 `06e75f9f463fec896838aec8f3bac8d0aa34ca16`。**beta.2 使用新构建与独立校验和**，新增实际安装扩展版本、脚本哈希及覆盖旧扩展检查；本轮结果以对应 Release 和 `installer-matrix.json` 为准。`baseline/`保留历史来源，源码统一入口为`launcher.py`。
 
@@ -35,17 +39,17 @@ beta.2 已完成两种安装器共 14 种组件组合检查，以及安装后扩
 
 ## 下载与按需安装
 
-安装后无需自行安装 Python。选择[在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.2/zzu-nscc-helper-online-0.5.0-beta.2-x64.exe)按需下载，或使用[完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.2/zzu-nscc-helper-offline-0.5.0-beta.2-x64.exe)。请对照 [SHA256SUMS.txt](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.2/SHA256SUMS.txt) 校验文件。安装器尚无 Authenticode 数字签名，Windows 可能显示发布者未知提示。
+安装后无需自行安装 Python。选择[在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.3/zzu-nscc-helper-online-0.5.0-beta.3-x64.exe)按需下载，或使用[完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.3/zzu-nscc-helper-offline-0.5.0-beta.3-x64.exe)。请对照 [SHA256SUMS.txt](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.3/SHA256SUMS.txt) 校验文件。安装器尚无 Authenticode 数字签名，Windows 可能显示发布者未知提示。
 
 | 可选组件 | 对应功能 | Edge扩展 |
 | --- | --- | --- |
-| 仅VPN保活 | 标签绑定、真实HTTPS交互、托盘和故障停止 | 首次手动加载一次 |
+| 仅VPN保活 | VPN与网页双通道、标签绑定、托盘和故障提示 | 首次手动加载一次 |
 | 仅Clash分流 | 环境检测、改动预览、应用、备份和回滚 | 不需要 |
 | 仅SFTP传输 | 中文上传下载、进度、校验、回执 | 不需要 |
 | 全部安装 | 三项功能 | 仅保活使用 |
 | 自定义 | 任意非空组合 | 按选项决定 |
 
-在线安装器只下载公共运行库和已选组件；离线安装包保留同样的组件选择。每个下载资产都要通过SHA-256校验。Release 中的 `core.zip` 等四个载荷由在线安装器使用，通常无需手动下载。新版安装器已包含 0.4.1 扩展，无需再下载补丁。[独立扩展包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.2/zzu-nscc-helper-edge-0.5.0-beta.2.zip)仅供需要单独部署扩展的用户；保活首次使用仍需手动加载一次，步骤见[安装说明](docs/INSTALLATION.md)。
+在线安装器只下载公共运行库和已选组件；离线安装包保留同样的组件选择。每个下载资产都要通过SHA-256校验。Release 中的 `core.zip` 等四个载荷由在线安装器使用，通常无需手动下载。新版安装器已包含 0.5.0 扩展，无需再下载补丁。[独立扩展包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.3/zzu-nscc-helper-edge-0.5.0-beta.3.zip)仅供需要单独部署扩展的用户；保活首次使用仍需手动加载一次，步骤见[安装说明](docs/INSTALLATION.md)。
 
 ## 现有源码与检查
 
@@ -62,6 +66,7 @@ beta.2 已完成两种安装器共 14 种组件组合检查，以及安装后扩
 ```powershell
 python -m unittest discover -s tests -v # 离线验证融合实现；本机通信测试需先编译Native Host。
 node tests/test_extension_fusion.cjs # 使用模拟Edge API验证融合扩展，不操作用户标签。
+node tests/test_web_session.cjs # 验证真实接口契约、失败、取消和响应脱敏，不访问平台。
 python scripts/audit_public_tree.py # 上传前检查实际文件、暂存内容和可达历史。
 ```
 
