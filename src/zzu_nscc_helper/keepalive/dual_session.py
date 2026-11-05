@@ -136,6 +136,7 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
             self.web_capable = 'web-session-v1' in msg.get('capabilities', [])  # 旧扩展必须升级。
         if event in ('hello', 'tabs', 'focus_error'):  # 复用本机列表与辅助定位。
             if event == 'tabs':  # 新扩展允许命令行页面参与只读会话维护。
+                self.web_capable = self.web_capable or any(type(tab.get('sessionEligible')) is bool for tab in msg.get('tabs', []) if isinstance(tab, dict))  # 宿主重连只请求列表；以新版专有能力字段恢复握手，不能要求用户反复重载。
                 msg = dict(msg, tabs=[dict(t, eligible=bool(t.get('sessionEligible'))) for t in msg.get('tabs', []) if isinstance(t, dict)])  # 不扩大旧恢复范围。
             super().received(msg)  # 只处理这些无旧生命周期副作用的事件。
             if event == 'tabs' and not self.token: self.fill_list()  # VPN运行且网页已暂停时可选择新页面。

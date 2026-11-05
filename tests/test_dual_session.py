@@ -107,4 +107,10 @@ class DualSessionTests(unittest.TestCase):  # 不继承旧版关闭即停的验�
         self.assertFalse(self.window.engine.active)  # 不只启动静态请求冒充双通道。
         self.window.send.assert_not_called()  # 无额外网络。
 
+    def test_desktop_reconnect_negotiates_from_list(self):  # NativeHost在助手重启时只请求列表，不重发旧hello。
+        self.window.web_capable = False  # 新桌面实例没有收到初始握手。
+        self.window.received({'event': 'tabs', 'version': '0.4.0', 'tabs': [self.tab]})  # 最新列表携带新版专有资格字段。
+        self.assertTrue(self.window.web_capable)  # 不要求反复重载扩展。
+        self.assertTrue(self.window.start_button.isEnabled())  # VPN检测有效后可直接启动。
+
 if __name__ == '__main__': unittest.main()  # 独立执行离线用例。
