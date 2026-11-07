@@ -16,7 +16,7 @@
 | 您需要解决的问题 | 助手提供的方式 |
 | --- | --- |
 | VPN 因长时间没有流量而断开 | 独立 HTTPS 通道首次成功后，每 **13 分钟**进行一次真实内网传输，检查 TLS、响应和 VPN 路由。 |
-| 网页长期没有业务交互 | 使用当前浏览器登录态，在随机助手专用目录完成 **1 KiB 上传 → 完整读回校验 → 删除 → 确认不存在**；首次手动开始执行一轮。新候选将完整成功后的周期由24小时改为 **5 小时**，观察对门户页面会话的实际效果。 |
+| 网页长期没有业务交互 | 使用当前浏览器登录态，在随机助手专用目录完成 **1 KiB 上传 → 完整读回校验 → 删除 → 确认不存在**；首次手动开始执行一轮。完整成功后的周期为 **5 小时**，观察对门户页面会话的实际效果。 |
 | Clash 与超算 VPN 的分流配置 | 检测实际端口、控制器和 VPN 网卡，针对本平台生成精确规则，提供改动预览、备份和回滚。 |
 | 超算文件上传下载与核验 | 中文 SFTP 界面支持文件和目录传输、同名保护、进度和回执；上传后完整读回并核对 SHA-256。 |
 
@@ -24,19 +24,17 @@
 
 ## 已经测试，并持续更新
 
-已发布的 beta.4 通过自动回归、在线与离线共 **14 种组件安装组合**、公开下载资产 SHA-256 核验，并在实际超算平台完成安装版的 **上传、读回校验、删除和清理确认**；VPN 的约 13 分钟间隔传输也已实际验证。新候选 beta.5 的验证单独记录，结果与限制公开保存在[阶段验收记录](docs/STAGES.md)。
+beta.5 已通过自动回归、在线与离线共 **14 种组件安装组合**及公开下载校验；本机升级后完成一次 **1 KiB 上传、完整读回校验、删除和清理确认**，VPN通道也有独立真实成功记录。真实跨5小时与外层门户持续登录仍待观察，详细证据与限制见[阶段验收记录](docs/STAGES.md)。
 
-项目会结合实际使用反馈持续修复和更新。目前仍为**测试版**：实际使用中已观察到 VPN 正常、命令行仍可用，但 E-File 和计算服务外层页面会话失效。beta.5 将文件交互缩短到5小时进行验证，**文件校验成功不等于门户登录已续期**；模拟时钟也不代替真实跨周期观察。各模块的实机覆盖范围以验收记录为准，不承诺绕过平台的强制登录期限。
+项目会结合实际使用反馈持续修复和更新。目前仍为**测试版**：实际使用中已观察到 VPN 正常、命令行仍可用，但 E-File 和计算服务外层页面会话失效。beta.5 已将文件交互缩短到5小时，继续观察实际效果，**文件校验成功不等于门户登录已续期**；模拟时钟也不代替真实跨周期观察。各模块的实机覆盖范围以验收记录为准，不承诺绕过平台的强制登录期限。
 
 ## 请确保您使用的是最新发布版本
 
 安装、升级或遇到问题时，请先查看 [GitHub Releases](https://github.com/pancake-github/zzu-nscc-helper/releases)，核对**主程序与配套 Edge 扩展**版本。旧安装包或旧扩展可能缺少最新修复；仓库源码已更新也不等于本机已经升级。
 
-当前发布：**`v0.5.0-beta.4`（界面 `0.5.0b4`），内置扩展 `0.5.2`**。
+当前发布：**`v0.5.0-beta.5`（界面 `0.5.0b5`），内置扩展 `0.5.3`**。VPN 13分钟，网页文件交互5小时；真实门户效果仍在观察。
 
-正在验证的新候选：**`v0.5.0-beta.5`（界面 `0.5.0b5`），配套扩展 `0.5.3`**。下方下载入口在新版本完成发布前仍指向 beta.4。
-
-**[在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-online-0.5.0-beta.4-x64.exe)** · **[完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-offline-0.5.0-beta.4-x64.exe)** · [本版发布说明](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.4)
+**[在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.5/zzu-nscc-helper-online-0.5.0-beta.5-x64.exe)** · **[完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.5/zzu-nscc-helper-offline-0.5.0-beta.5-x64.exe)** · [本版发布说明](https://github.com/pancake-github/zzu-nscc-helper/releases/tag/v0.5.0-beta.5)
 
 两种安装器均已包含配套扩展，无需另装补丁。旧版用户从托盘退出助手后覆盖升级；Edge 首次使用需手动加载安装目录中的扩展，升级后重新加载一次并核对版本。支持带会话参数的 E-File、计算服务和命令行页面，具体步骤见[安装说明](docs/INSTALLATION.md)。
 
@@ -44,13 +42,15 @@
 
 ## 双通道维护策略
 
-新候选的VPN独立HTTPS仍在成功后等待13分钟；网页使用当前浏览器登录态和所选集群，在个人主目录的随机助手专用目录中完成1KiB文件上传、完整读回SHA-256、删除及不存在确认，成功后等待5小时。两轮之间不定期请求网页接口，不新增门户续期请求。短暂故障按30秒、60秒、随后180秒退避，先恢复原事务；不会重复上传或清理其他文件。关闭全部关联网页或登录失效时暂停网页维护，VPN继续。详见[网页维护与隐私边界](docs/WEB_SESSION.md)。
+VPN独立HTTPS仍在成功后等待13分钟；网页使用当前浏览器登录态和所选集群，在个人主目录的随机助手专用目录中完成1KiB文件上传、完整读回SHA-256、删除及不存在确认，成功后等待5小时。两轮之间不定期请求网页接口，不新增门户续期请求。短暂故障按30秒、60秒、随后180秒退避，先恢复原事务；不会重复上传或清理其他文件。关闭全部关联网页或登录失效时暂停网页维护，VPN继续。详见[网页维护与隐私边界](docs/WEB_SESSION.md)。
 
 ## 当前实际状态
 
-当前整合版本为 **0.5.0-beta.4**（界面 **0.5.0b4**），内置扩展 **0.5.2**；基础连接协议保持 **0.4.0**，新网页功能另行核对能力字段。统一中文界面、独立后台进程、真实保活入口、SFTP上传下载界面，以及Clash检测、预览、事务应用和回滚均已接入。尚未完成的实机项目在下文和发布说明中保留，不标为稳定版。
+当前整合版本为 **0.5.0-beta.5**（界面 **0.5.0b5**），内置扩展 **0.5.3**；基础连接协议保持 **0.4.0**，新网页功能另行核对能力字段。统一中文界面、独立后台进程、真实保活入口、SFTP上传下载界面，以及Clash检测、预览、事务应用和回滚均已接入。尚未完成的实机项目在下文和发布说明中保留，不标为稳定版。
 
-beta.4 [构建41989829586](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/41989829586)已通过回归、隐私与安装包审核，以及在线、离线共14种组件组合和覆盖旧扩展检查。源码及本机安装版均已完成真实文件上传、读回校验、删除与不存在确认，VPN独立完成约13分钟间隔的两次请求。24小时调度通过模拟时钟验证，真实跨日尚未验证；[发布后复核41991506941](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/41991506941)已通过全部公开资产匿名回读和真实在线下载安装；本机0.5.0b4已使用同一哈希的离线包升级，详见[阶段记录](docs/STAGES.md)。
+源码 `7b68168b1277d6de8c5c2ba1944842c3ec2f693c` 的[构建 42348413022](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/42348413022)通过回归、资产审核、在线与离线共14种组件安装组合及升级检查；[公开复核 42351132207](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/42351132207)通过匿名回读、SHA-256与资产审核，以及在线实际下载安装、自检、GUI启动和卸载。本机使用同一哈希的完整离线包升级，扩展为0.5.3，并于 2026-11-07 15:20:39 完成1KiB上传、完整读回校验、删除及不存在确认；VPN有独立真实成功记录。正常网页间隔18000秒、VPN间隔780秒。**真实跨5小时与外层门户持续登录仍未验证**，文件事务成功不能视为门户SSO已经续期。
+
+历史 beta.4 [构建41989829586](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/41989829586)已通过回归、隐私与安装包审核，以及在线、离线共14种组件组合和覆盖旧扩展检查。源码及本机安装版均已完成真实文件上传、读回校验、删除与不存在确认，VPN独立完成约13分钟间隔的两次请求。24小时调度通过模拟时钟验证，真实跨日尚未验证；[发布后复核41991506941](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/41991506941)已通过全部公开资产匿名回读和真实在线下载安装；本机0.5.0b4已使用同一哈希的离线包升级，详见[阶段记录](docs/STAGES.md)。
 
 历史 beta.3 [构建 41971147570](https://github.com/pancake-github/zzu-nscc-helper/actions/runs/41971147570)通过在线、离线共 14 种组件组合及升级保护检查。本轮源码在真实平台连续运行超过 15 分钟，VPN 和两个业务页均完成第 0、13 分钟两轮交互；网页认证响应验证及页面状态更新成功。该记录不等于隔天持续运行或所有模块均已实测，最新安装与分发结果见[阶段记录](docs/STAGES.md)。
 
@@ -73,7 +73,7 @@ beta.2 已完成两种安装器共 14 种组件组合检查，以及安装后扩
 
 ## 下载与按需安装
 
-安装后无需自行安装 Python。选择[在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-online-0.5.0-beta.4-x64.exe)按需下载，或使用[完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-offline-0.5.0-beta.4-x64.exe)。请对照 [SHA256SUMS.txt](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/SHA256SUMS.txt) 校验文件。安装器尚无 Authenticode 数字签名，Windows 可能显示发布者未知提示。
+安装后无需自行安装 Python。选择[在线安装器](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.5/zzu-nscc-helper-online-0.5.0-beta.5-x64.exe)按需下载，或使用[完整离线安装包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.5/zzu-nscc-helper-offline-0.5.0-beta.5-x64.exe)。请对照 [SHA256SUMS.txt](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.5/SHA256SUMS.txt) 校验文件。安装器尚无 Authenticode 数字签名，Windows 可能显示发布者未知提示。
 
 | 可选组件 | 对应功能 | Edge扩展 |
 | --- | --- | --- |
@@ -83,7 +83,7 @@ beta.2 已完成两种安装器共 14 种组件组合检查，以及安装后扩
 | 全部安装 | 三项功能 | 仅保活使用 |
 | 自定义 | 任意非空组合 | 按选项决定 |
 
-在线安装器只下载公共运行库和已选组件；离线安装包保留同样的组件选择。每个下载资产都要通过SHA-256校验。Release 中的 `core.zip` 等四个载荷由在线安装器使用，通常无需手动下载。新版安装器已包含 0.5.2 扩展，无需再下载补丁。[独立扩展包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.4/zzu-nscc-helper-edge-0.5.0-beta.4.zip)仅供需要单独部署扩展的用户；保活首次使用仍需手动加载一次，步骤见[安装说明](docs/INSTALLATION.md)。
+在线安装器只下载公共运行库和已选组件；离线安装包保留同样的组件选择。每个下载资产都要通过SHA-256校验。Release 中的 `core.zip` 等四个载荷由在线安装器使用，通常无需手动下载。新版安装器已包含 0.5.3 扩展，无需再下载补丁。[独立扩展包](https://github.com/pancake-github/zzu-nscc-helper/releases/download/v0.5.0-beta.5/zzu-nscc-helper-edge-0.5.0-beta.5.zip)仅供需要单独部署扩展的用户；保活首次使用仍需手动加载一次，步骤见[安装说明](docs/INSTALLATION.md)。
 
 ## 现有源码与检查
 
