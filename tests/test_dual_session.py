@@ -48,7 +48,8 @@ class DualSessionTests(unittest.TestCase):  # 不继承旧版关闭即停的验�
         self.running()  # VPN已有首次成功。
         self.success()  # 网页独立首次成功。
         self.assertEqual((self.window.engine.count, self.window.web_count), (1, 1))  # 两类统计不混用。
-        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 86400, delta=1)  # 网页完整成功后24小时。
+        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 18000, delta=1)  # E-File完整成功后5小时。
+        self.assertAlmostEqual(self.window.engine.due - time.monotonic(), 780, delta=1)  # VPN仍独立使用13分钟。
         previous = self.window.web_due  # 记录旧截止。
         self.success()  # 重复回调必须忽略。
         self.assertEqual(self.window.web_count, 1)  # 不重复计数。
@@ -126,7 +127,8 @@ class DualSessionTests(unittest.TestCase):  # 不继承旧版关闭即停的验�
         self.window.request_web()  # 后台恢复。
         self.success()  # 新轮返回真实成功。
         self.assertEqual(self.window.web_failures, 0)  # 清除连续失败。
-        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 86400, delta=1)  # 恢复正常24小时周期。
+        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 18000, delta=1)  # 恢复完整成功后重新等待5小时。
+        self.assertEqual(self.window.engine.due, vpn_due)  # 故障恢复不更改VPN原定时刻。
 
     def test_deadline_requires_cancel_ack_before_retry(self):  # 不在状态未知时发第二个请求。
         self.running()  # 原请求正在执行。
@@ -157,25 +159,101 @@ class DualSessionTests(unittest.TestCase):  # 不继承旧版关闭即停的验�
         self.window.received({'event': 'tabs', 'version': '0.4.0', 'tabs': [self.tab]})  # 旧0.5.0列表仍有sessionEligible。
         self.assertFalse(self.window.web_capable)  # 必须声明协议2。
 
-    def test_daily_due_does_not_send_between_cycles(self):  # 模拟时钟证明24小时前无网页请求。
+    def test_file_due_does_not_send_between_cycles(self):  # 模拟时钟证明5小时前无网页文件请求。
         self.running()  # 两个通道已启动。
         self.success()  # 首轮完整文件事务完成。
         due = self.window.web_due  # 真实生产调度的到期点。
         self.window.bridge.send.reset_mock()  # 只统计之后的命令。
-        with patch('zzu_nscc_helper.keepalive.dual_session.MainWindow.tick'), patch('zzu_nscc_helper.keepalive.dual_session.time.monotonic', return_value=due - 1):  # 仅推进网页时钟，不虚构实际运行24小时。
+        with patch('zzu_nscc_helper.keepalive.dual_session.MainWindow.tick'), patch('zzu_nscc_helper.keepalive.dual_session.time.monotonic', return_value=due - 1):  # 仅推进网页时钟，不虚构实际运行5小时。
             self.window.bridge.last_seen = due - 1  # 本机心跳正常。
             self.window.tick()  # 还差一秒。
         self.window.bridge.send.assert_not_called()  # 未到期完全不请求网页。
         with patch('zzu_nscc_helper.keepalive.dual_session.MainWindow.tick'), patch('zzu_nscc_helper.keepalive.dual_session.time.monotonic', return_value=due):  # 到期时刻。
             self.window.bridge.last_seen = due  # 本机连接保持。
             self.window.tick()  # 仅发起一个新轮次。
+            self.window.tick()  # 同一秒重复本机轮询不得重复发起。
         self.assertEqual(self.window.bridge.send.call_count, 1)  # 无补发积压。
         self.assertEqual(self.window.bridge.send.call_args.args[0], 'web_request')  # 实际调度命令。
         self.assertTrue(self.window.web_pending)  # 等完整结果再计时。
 
+    def test_file_schedule_grace_boundary_does_not_replay_missed_round(self):  # 区分允许的30秒调度余量与错过计划后补发。
+        for delay, allowed in ((30, True), (30.001, False)):  # 精确检查边界及刚刚超出边界。
+            with self.subTest(delay=delay):  # 每种情况独立授权，不复用上次待处理请求。
+                self.window.stop()  # 清理上一种情况的本机状态。
+                self.running()  # 建立新的合成VPN成功与文件绑定。
+                self.success()  # 首轮完整文件事务已确认。
+                due = self.window.web_due  # 以实际生产代码给出的成功后时刻为准。
+                self.window.bridge.send.reset_mock()  # 不计此前绑定及首轮命令。
+                with patch('zzu_nscc_helper.keepalive.dual_session.MainWindow.tick'), patch('zzu_nscc_helper.keepalive.dual_session.time.monotonic', return_value=due + delay):  # 仅模拟文件调度，隔离VPN自己的长时间停顿保护。
+                    self.window.bridge.last_seen = due + delay  # 本机桥接仍然健康。
+                    self.window.tick()  # 执行真实文件通道到期判断。
+                self.assertEqual(self.window.web_pending, allowed)  # 仅在余量内允许发起一轮。
+                self.assertEqual(self.window.bridge.send.call_args.args[0], 'web_request' if allowed else 'web_stop')  # 超时仅撤销，不补发文件交互。
+                self.assertTrue(self.window.engine.active)  # 单独文件通道错过时刻不停止VPN。
+
+    def test_vpn_780_second_due_runs_while_file_waits_five_hours(self):  # VPN到期不受更长文件周期限制。
+        with patch('zzu_nscc_helper.keepalive.dual_session.time.monotonic', return_value=1000):  # 所有合成成功使用同一明确基准。
+            self.running()  # 不启动任何网络工作程序。
+            self.success()  # 文件首轮完整成功。
+        self.assertEqual(self.window.engine.due, 1780)  # VPN成功后780秒。
+        self.assertEqual(self.window.web_due, 19000)  # 文件成功后18000秒。
+        self.window.send.reset_mock()  # 只统计之后VPN发送。
+        self.window.bridge.send.reset_mock()  # 文件请求必须继续安静等待。
+        self.window.engine.last_tick = 1779  # 模拟后台此前每秒正常轮询，非睡眠唤醒。
+        self.window.bridge.last_seen = 1780  # 本机心跳同时正常。
+        with patch('zzu_nscc_helper.keepalive.dual_session.time.monotonic', return_value=1780):  # 精确抵达VPN下次发送时刻。
+            self.window.tick()  # 保留真实MainWindow.tick与Engine.poll，不替换VPN状态机。
+        self.window.send.assert_called_once()  # 只触发VPN工作程序入口替身。
+        self.window.bridge.send.assert_not_called()  # 未提前触发文件交互。
+        self.assertTrue(self.window.engine.success(1780.5))  # 注入第二次VPN验证成功。
+        self.assertEqual(self.window.engine.due, 2560.5)  # 下一次仍从VPN成功后等待780秒。
+        self.assertEqual(self.window.web_due, 19000)  # 文件周期保持原截止。
+
+    def retry_notice(self):  # 模拟通用提醒创建与替换合同，不显示实际弹窗。
+        def capture(message):  # 仅建立可观察的关闭行为。
+            if self.window.notice is not None: self.window.notice.close()  # 与现有通用alert替换旧提醒一致。
+            self.window.notice = Mock()  # 每个提醒拥有独立对象身份。
+        self.window.alert.side_effect = capture  # 禁止实际窗口交互。
+        for index in range(3):  # 连续三次暂态失败才显示一次提醒。
+            if index: self.window.request_web()  # 仅模拟下一次退避到期后的请求。
+            self.window.received({'event': 'web_failed', 'token': self.window.token, 'request': self.window.web_request_id, 'code': 'WEB_PAGE_NOT_READY', 'settled': True})  # 业务页未就绪的真实失败协议。
+        self.window.alert.assert_called_once()  # 同一次持续故障只创建一个提醒。
+        return self.window.notice  # 返回用户当前看到的提醒替身。
+
+    def test_recovered_file_round_closes_its_retry_notice(self):  # 修复完整成功后仍残留旧失败提示。
+        self.running()  # 同一已授权的业务页。
+        notice = self.retry_notice()  # 触发实际重试控制器的一次提示。
+        self.window.request_web()  # 进入恢复请求。
+        self.success()  # 只有完整上传校验与清理成功才撤销旧提醒。
+        notice.close.assert_called_once()  # 原故障提示确已消退。
+        self.assertIsNone(self.window.notice)  # 不再将旧提示保留为当前提醒。
+        self.assertFalse(self.window.web_warned)  # 后续独立故障仍可提醒。
+        self.assertAlmostEqual(self.window.web_due - time.monotonic(), 18000, delta=1)  # 自动恢复后仍等待完整5小时。
+
+    def test_file_recovery_preserves_newer_other_notice(self):  # 不能误关VPN、帮助或其他类别提醒。
+        self.running()  # 本次文件交互已授权。
+        old_notice = self.retry_notice()  # 文件暂态故障提示先出现。
+        self.window.alert('其他需要处理的提示')  # 用户随后看到其他提醒，通用机制关闭旧框。
+        other_notice = self.window.notice  # 保存真正当前的提醒对象。
+        self.window.request_web()  # 文件服务后来恢复。
+        self.success()  # 完整成功仅有权清理原网页故障提醒。
+        old_notice.close.assert_called_once()  # 只在其他提醒替换时关闭一次，成功不重复操作。
+        other_notice.close.assert_not_called()  # 当前其他提醒必须保留。
+        self.assertIs(self.window.notice, other_notice)  # 不清空其他提醒引用。
+
+    def test_old_request_success_does_not_dismiss_current_retry_notice(self):  # 迟到的旧请求不能消除当前故障。
+        self.running()  # 初次授权。
+        notice = self.retry_notice()  # 当前仍未恢复。
+        old_request = self.window.web_request_id  # 保存已失败轮次。
+        self.window.request_web()  # 新一轮待确认。
+        self.window.received({'event': 'web_success', 'token': self.window.token, 'request': old_request, 'pages': 2, 'bytes': 1024, 'elapsed': 0.3, 'daily': True, 'cleanup': 'confirmed'})  # 注入协议合法但过期的成功。
+        notice.close.assert_not_called()  # 旧成功无权撤销当前提示。
+        self.assertEqual(self.window.web_count, 0)  # 不误计成功。
+        self.assertTrue(self.window.web_pending)  # 继续等待当前请求的真实结果。
+
     def test_readonly_success_cannot_complete_daily_transaction(self):  # 旧扩展成功格式必须被拒绝。
         self.running()  # 新版绑定。
-        self.window.received({'event': 'web_success', 'token': self.window.token, 'request': self.window.web_request_id, 'pages': 2, 'bytes': 1024, 'elapsed': 1})  # 缺少每日能力及清理确认。
+        self.window.received({'event': 'web_success', 'token': self.window.token, 'request': self.window.web_request_id, 'pages': 2, 'bytes': 1024, 'elapsed': 1})  # 缺少兼容文件事务标识及清理确认。
         self.assertEqual(self.window.web_count, 0)  # 不能把只读请求计为文件成功。
         self.assertTrue(self.window.engine.active)  # 独立VPN不受影响。
 

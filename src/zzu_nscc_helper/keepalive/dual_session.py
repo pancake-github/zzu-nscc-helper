@@ -1,4 +1,4 @@
-"""独立 VPN 保活与浏览器内真实网页会话维护。"""  # 两类成功记录不可相互冒充。
+"""独立 VPN 保活与浏览器内 E-File 周期文件交互。"""  # 文件服务成功不代表门户会话续期。
 import re  # 隐藏显示中的会话路径参数。
 import time  # 使用单调时钟调度。
 import uuid  # 每次网页绑定使用新的本机授权标识。
@@ -7,10 +7,10 @@ from .app import MainWindow, stamp  # 复用已验证的独立 HTTPS 工作进�
 from .tab_app import TabWindow  # 保留扩展连接、列表及首次安装引导。
 
 WEB_ERRORS = {  # 只将有限类别写日志，不接受网页原文。
-    'WEB_LOGIN_EXPIRED': '网页登录已失效，请在浏览器重新登录后重新绑定。',  # 不自动登录。
+    'WEB_LOGIN_EXPIRED': 'E-File 服务认证已失效，请在浏览器确认登录后重新绑定。',  # 不将文件认证失败冒充全部门户状态，也不自动登录。
     'WEB_TARGET_CHANGED': '网页地址或登录会话已改变，请重新绑定。',  # 不猜测新会话。
     'WEB_TARGET_CLOSED': '参与维护的网页已关闭，请选择现有业务页重新绑定。',  # 不关闭其他网页。
-    'WEB_PAGE_NOT_READY': '网页未完成登录或初始化，请打开业务页后重新绑定。',  # 不把静态页面当已登录。
+    'WEB_PAGE_NOT_READY': '业务页尚未就绪，请打开已登录的业务页；助手会自动重试。',  # 不要求反复重新绑定，也不把静态页面当已登录。
     'WEB_DISCONNECTED': 'Edge 或连接器已断开，网页维护已暂停。',  # VPN 不随浏览器退出。
     'WEB_TIMEOUT': '网页请求暂时超时。',  # 确认取消后自动退避恢复。
     'WEB_NETWORK': '网页网络暂时不可达。',  # 不把一次网络波动当登录失效。
@@ -30,7 +30,7 @@ WEB_ERRORS = {  # 只将有限类别写日志，不接受网页原文。
     'WEB_MISSED': '网页交互错过计划时刻，已暂停。',  # 不集中补发。
 }  # 结束固定类别。
 WEB_TRANSIENT = {'WEB_TIMEOUT', 'WEB_NETWORK', 'WEB_SERVER_BUSY', 'WEB_RESPONSE_EMPTY', 'WEB_PAGE_NOT_READY', 'WEB_CLEANUP_PENDING', 'WEB_SERVICE_REJECTED'}  # 与扩展的可恢复错误保持一致。
-WEB_INTERVAL = 86400  # 网页仅完整文件事务成功后等待24小时；VPN仍为780秒。
+WEB_INTERVAL = 18000  # E-File完整文件事务成功后等待5小时；VPN仍为780秒。
 WEB_STAGE_LABELS = {'dispatch': '等待扩展', 'identity': '核对身份与服务', 'directory': '核对专用目录', 'upload': '上传1KiB文件', 'readback': '完整读回与SHA-256校验', 'delete': '删除本轮文件', 'absence': '确认文件不存在', 'complete': '清理已确认', 'idle': '尚未开始'}  # 固定阶段名称不含路径。
 
 def display_url(value):  # 界面隐藏会话标识，绑定仍在内存中使用完整地址。
@@ -46,28 +46,29 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
         self.web_request_id = 0  # 丢弃迟到或重复结果。
         self.web_failures = 0  # 连续失败次数，成功后清零。
         self.web_warned = False  # 一次持续故障只提醒一次。
+        self.web_retry_notice = None  # 只记本次网页重试提醒及其绑定身份，不接管其他提醒。
         self.web_cancelling = False  # 超时后等待取消确认，禁止叠加新请求。
         self.web_synced = 0  # 页面内同步与服务器HTTP成功分别显示。
         self.web_diagnostic = None  # 固定错误位置和类型，仅供脱敏诊断。
         self.web_cleanup = '尚未开始'  # 清理状态与成功时间分开，失败不会假装已删除。
         self.web_stage = 'idle'  # 仅使用固定诊断阶段。
         self.web_first = self.web_last = '—'  # 网页真实成功时间。
-        self.web_summary = '尚未启动网页交互。'  # 不依赖 VPN 状态猜测网页登录状态。
+        self.web_summary = '尚未启动 E-File 文件交互。'  # 不依赖 VPN 状态猜测门户登录状态。
         self.web_label = None  # 基类构造阶段尚无独立标签。
         super().__init__(connect=connect)  # 保留现有扩展安装与桥接。
-        self.related = QCheckBox('同时维护同一登录会话下已打开的 E-File、计算服务和命令行页面（最多10页）')  # 用户可明确缩小范围。
+        self.related = QCheckBox('关联同一登录会话下已打开的 E-File、计算服务和命令行页面（最多10页）')  # 关联本地状态不表示门户会话已续期。
         self.related.setChecked(True)  # 与界面说明一致，只在点击开始时确定页面集合。
         self.layout().insertWidget(4, self.related)  # 放在选择与状态区域附近。
         self.web_label = QLabel()  # 网页结果不混入 VPN 计数。
         self.web_label.setWordWrap(True)  # 多行显示清楚。
         self.layout().addWidget(self.web_label)  # 位于统一面板内。
-        self.scope_label.setText('选择一个已登录的超算业务页。将按所选集群在个人主目录建立随机助手专用目录，上传、校验并删除1KiB测试文件；不刷新页面、不发送终端命令。\n关闭浏览器或重新登录不会结束 VPN 保活；网页维护暂停后可重新绑定。')  # 准确说明新生命周期。
+        self.scope_label.setText('选择一个已登录的超算业务页。将按所选集群在个人主目录建立随机助手专用目录，上传、校验并删除1KiB测试文件；不刷新页面、不发送终端命令。\n关闭浏览器或重新登录不会结束 VPN 保活；E-File文件交互暂停后可重新绑定。')  # 准确说明新生命周期。
         self.update_mode_ui()  # 构造完成后更新真实模式提示。
         self.update_details()  # 显示两套独立状态。
 
     def update_mode_ui(self, unused=None):  # 不把离线模拟冒充网页传输。
         live = self.mode.currentData() == 'live'  # 当前模式。
-        self.banner.setText('VPN：13分钟一次HTTPS传输；网页文件交互：24小时一次。\n首次立即上传1KiB专用文件、读回校验、删除并确认不存在；完整成功后计时，短暂故障自动退避。' if live else '离线模拟：不发送 VPN 或网页保活流量。')  # 实际时间与容错策略明确呈现。
+        self.banner.setText('VPN：13分钟一次HTTPS传输；E-File文件交互：5小时一次。\n首次立即上传1KiB专用文件、读回校验、删除并确认不存在；完整成功后计时，短暂故障自动退避。文件交互成功不代表门户会话已续期。' if live else '离线模拟：不发送 VPN 或 E-File 保活流量。')  # 实际时间与认证层次分别说明。
         self.start_button.setText('重新绑定网页' if self.engine.active else '绑定并开始双通道保活' if live else '开始离线模拟')  # 无额外确认步骤。
 
     def target_alive(self, target):  # VPN 生命周期不再依赖标签存活。
@@ -89,7 +90,7 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
         if not isinstance(selected, dict):  # 扩展尚无列表。
             self.selection.setText('请选择已登录的 E-File、计算服务或命令行页面。')  # 不要求重启其他业务页。
             return  # 无网址可展示。
-        self.selection.setText(('网页已绑定' if self.token else '已选中业务页' if selected.get('eligible') else '此页不能维护网页登录会话') + '\n' + display_url(selected.get('url', '')))  # 只展示脱敏地址。
+        self.selection.setText(('网页已绑定' if self.token else '已选中业务页' if selected.get('eligible') else '此页不能用于 E-File 文件交互') + '\n' + display_url(selected.get('url', '')))  # 只展示脱敏地址，不声称门户续期。
 
     def fill_list(self):  # 使用基类选择身份逻辑后脱敏可见文本。
         super().fill_list()  # 完整 URL 仍仅保存在条目内存中。
@@ -106,7 +107,7 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
             self.alert('请选择已连接 Edge 中的已登录超算业务页。')  # 不请求敏感登录信息。
             return  # 无请求。
         if live and (not self.web_capable or not getattr(self, 'vpn_guid', None)):  # 版本和路由检查都有依据。
-            self.alert('请确认VPN检测通过，并将内置Edge扩展更新到0.5.2后重新加载一次。')  # 新版使用明确的后台会话能力。
+            self.alert('请确认VPN检测通过，并将内置Edge扩展更新到0.5.3后重新加载一次。')  # 新版仍核对明确的文件交互能力。
             return  # 旧扩展不能降级成只有静态流量。
         self.bound = self.confirmed = target  # 保存当前授权身份。
         if live:  # 网页任务由首次 VPN 真实成功后开始。
@@ -117,7 +118,7 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
             self.web_count = 0  # 重新绑定的新计数。
             self.web_failures = self.web_synced = 0  # 不拼接旧故障与页面同步状态。
             self.web_warned = self.web_cancelling = False  # 新授权有独立通知周期。
-            self.web_summary = '等待 VPN 首次验证后发起网页真实请求。'  # 首次没有请求不能显示成功。
+            self.web_summary = '等待 VPN 首次验证后发起 E-File 文件交互。'  # 首次没有请求不能显示成功。
             self.lock_controls()  # 绑定期间禁止改选。
             self.related.setEnabled(False)  # 页面范围固定于本次授权。
         if not self.engine.active:  # 独立 VPN 已运行时不重置其时刻。
@@ -149,7 +150,7 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
         self.operation_deadline = time.monotonic() + 420  # 多阶段每请求30秒；整轮七分钟上限，不随进度无限延长。
         self.web_cancelling = False  # 新轮次不继承取消状态。
         self.web_stage = 'dispatch'  # 实际网络开始由扩展另行确认。
-        self.web_summary = f'正在执行每日文件交互（关联{self.web_pages}页）…'  # 仅完整上传校验和清理后成功。
+        self.web_summary = f'正在执行本轮 E-File 文件交互（关联{self.web_pages}页）…'  # 仅完整上传校验和清理后成功。
         self.log('WEB_REQUEST')  # 只记录固定状态，便于核对请求缺口。
         if not self.bridge or not self.bridge.send('web_request', token=self.token, request=self.web_request_id):  # 只发本机请求命令。
             self.pause_web('WEB_DISCONNECTED')  # 网页停止，VPN继续。
@@ -159,12 +160,12 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
         if event == 'hello':  # 需要明确能力，不能从旧协议号猜测。
             self.web_capable = 'web-daily-file-v1' in msg.get('capabilities', [])  # 需要后台请求与取消确认能力。
         if event in ('hello', 'tabs', 'focus_error'):  # 复用本机列表与辅助定位。
-            if event == 'tabs':  # 新扩展允许命令行页面关联每日文件维护。
+            if event == 'tabs':  # 新扩展允许命令行页面关联周期文件维护。
                 self.web_capable = self.web_capable or msg.get('sessionProtocol') == 3  # 空标签列表也可重新协商，不要求反复重载。
                 msg = dict(msg, tabs=[dict(t, eligible=bool(t.get('sessionEligible'))) for t in msg.get('tabs', []) if isinstance(t, dict)])  # 不扩大旧恢复范围。
             super().received(msg)  # 只处理这些无旧生命周期副作用的事件。
             if event == 'tabs' and not self.token: self.fill_list()  # VPN运行且网页已暂停时可选择新页面。
-            if not self.web_capable: self.connection.setText(self.connection.text() + ' · 网页维护需要扩展0.5.2')  # 不静默降级。
+            if not self.web_capable: self.connection.setText(self.connection.text() + ' · E-File文件交互需要扩展0.5.3')  # 不静默降级。
             return  # 不进入旧版关闭即停逻辑。
         if not self.token or msg.get('token') != self.token:  # 忽略其他绑定的结果。
             return  # 不重启任务。
@@ -183,7 +184,7 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
         elif event == 'web_targets' and type(msg.get('pages')) is int and 1 <= msg['pages'] <= 10:  # 单页关闭只缩小范围。
             self.web_pages = msg['pages']  # 仍有目标时继续原计时。
         elif event == 'web_success' and self.web_pending and not self.web_cancelling and msg.get('request') == self.web_request_id:  # 取消中或旧轮结果不能续期。
-            valid = type(msg.get('pages')) is int and 1 <= msg['pages'] <= self.web_pages and type(msg.get('bytes')) is int and msg['bytes'] == 1024 and isinstance(msg.get('elapsed'), (int, float)) and 0 <= msg['elapsed'] <= 420 and msg.get('daily') is True and msg.get('cleanup') == 'confirmed'  # 旧扩展的只读成功不能冒充每日文件交互。
+            valid = type(msg.get('pages')) is int and 1 <= msg['pages'] <= self.web_pages and type(msg.get('bytes')) is int and msg['bytes'] == 1024 and isinstance(msg.get('elapsed'), (int, float)) and 0 <= msg['elapsed'] <= 420 and msg.get('daily') is True and msg.get('cleanup') == 'confirmed'  # 保留兼容协议字段，旧只读成功不能冒充完整文件交互。
             if not valid or time.monotonic() >= self.operation_deadline:  # 迟到成功不能续期。
                 self.pause_web('WEB_RESPONSE_INVALID')  # 不增加成功轮数。
                 return  # 停止网页循环。
@@ -192,15 +193,19 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
             self.web_pages = msg['pages']  # 容纳请求期间关闭的非最后一个页面。
             self.web_failures = self.web_synced = 0  # 恢复后重新开始正常周期。
             self.web_warned = False  # 下一次独立故障可以重新提醒。
+            notice, self.web_retry_notice = self.web_retry_notice, None  # 完整成功后释放本轮暂态提醒归属。
+            if notice and notice[0] == self.token and self.notice is notice[1]:  # 仅撤销同一绑定仍在显示的网页重试提醒。
+                self.notice.close()  # 不关闭后来出现的VPN故障、帮助或其他提示。
+                self.notice = None  # 已撤销的旧提醒不留作当前通知。
             self.web_count += 1  # 与 VPN 次数独立。
             self.web_last = stamp()  # 用户可看到实际时间。
             if self.web_first == '—': self.web_first = self.web_last  # 首次网页成功起点。
-            self.web_due = time.monotonic() + WEB_INTERVAL  # 完整事务成功后24小时，不拼接失败时间。
-            self.web_summary = f'1KiB上传、完整读回校验与删除确认全部成功；专用目录保留复用，24小时后维护。'  # 不把后台成功冒充冻结页已更新。
+            self.web_due = time.monotonic() + WEB_INTERVAL  # 完整事务成功后5小时，不拼接失败时间。
+            self.web_summary = 'E-File 1KiB上传、完整读回校验与删除确认全部成功；专用目录保留复用，5小时后维护。'  # 不把文件服务成功冒充门户会话续期。
             self.log('WEB_SUCCESS', bytes=msg['bytes'], elapsed=msg['elapsed'])  # 不记录返回内容。
         elif event == 'web_sync' and msg.get('request') == self.web_request_id and not self.web_pending and type(msg.get('synced')) is int and 0 <= msg['synced'] <= self.web_pages:  # 页面同步与HTTP计数分离。
             self.web_synced = msg['synced']  # 冻结标签可在恢复响应后完成。
-            self.web_summary = f'文件交互完整成功，清理已确认；页面已同步{self.web_synced}/{self.web_pages}。' + (' 休眠或忙碌页面将在恢复响应后同步。' if self.web_synced < self.web_pages else '')  # 不要求手动登录。
+            self.web_summary = f'E-File文件交互完整成功，清理已确认；本地页面状态已同步{self.web_synced}/{self.web_pages}。' + (' 休眠或忙碌页面将在恢复响应后同步。' if self.web_synced < self.web_pages else '')  # 本地同步不是服务端门户续期。
         elif event == 'web_cancelled' and self.web_cancelling and msg.get('request') == self.web_request_id:  # 收到真实取消确认才重试。
             self.retry_web('WEB_TIMEOUT')  # 不与旧请求重叠。
         elif event == 'web_failed' and (msg.get('request') is None or msg.get('request') == self.web_request_id):  # 忽略过期失败。
@@ -219,7 +224,8 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
         self.log('WEB_RETRY', error=reason)  # 只记录有限类别。
         if self.web_failures >= 3 and not self.web_warned:  # 连续故障才提醒一次。
             self.web_warned = True  # 持续重试不刷弹窗。
-            self.alert('网页会话连续交互未成功，已降低频率并继续尝试。VPN保活继续；可查看浏览器是否仍已登录。')  # 不声称认证过期。
+            self.alert('E-File文件交互连续未成功，已降低频率并继续尝试。VPN保活继续；请确认所选业务页已打开并登录。')  # 不把文件服务失败统称门户认证过期。
+            self.web_retry_notice = (self.token, self.notice) if self.notice is not None else None  # 记录实际生成的专属提醒，后续成功才能准确撤销。
 
     def pause_web(self, reason, notify=True):  # 网页停止不牵连 VPN 或 SFTP。
         active = bool(self.token)  # 同一故障最多提醒一次。
@@ -239,7 +245,7 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
     def disconnected(self):  # Edge断线只是网页通道中断。
         self.web_capable = False  # 下次握手重新验证能力。
         self.pause_web('WEB_DISCONNECTED')  # 独立VPN不停止。
-        self.connection.setText('Edge已断开；VPN保活状态请看下方，网页登录维护已暂停。')  # 不隐瞒网页登录问题。
+        self.connection.setText('Edge已断开；VPN保活状态请看下方，E-File文件交互已暂停。')  # 不把通道断开误报为门户到期。
         self.tabs = {}  # 清除旧候选。
         self.fill_list()  # 不自动重绑。
 
@@ -266,7 +272,7 @@ class DualSessionWindow(TabWindow):  # 新版默认入口；历史严格标签�
             seconds = max(0, int(self.web_due - time.monotonic())) if self.web_due is not None else None  # 网页独立倒计时。
             countdown = f'{seconds // 3600:02d}:{seconds // 60 % 60:02d}:{seconds % 60:02d}' if seconds is not None else '—'  # 分秒显示。
             next_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time() + seconds)) if seconds is not None else '—'  # 日期仅供显示，实际调度继续使用单调时钟。
-            self.web_label.setText(f'网页文件交互（24小时）：{self.web_summary}\n阶段：{WEB_STAGE_LABELS.get(self.web_stage, "等待")}　清理：{self.web_cleanup}\n首次完整成功：{self.web_first}　最近完整成功：{self.web_last}\n下次维护：{next_time}（{countdown}后）　维护成功次数：{self.web_count}')  # 不显示响应正文。
+            self.web_label.setText(f'E-File文件交互（5小时）：{self.web_summary}\n阶段：{WEB_STAGE_LABELS.get(self.web_stage, "等待")}　清理：{self.web_cleanup}\n首次完整成功：{self.web_first}　最近完整成功：{self.web_last}\n下次维护：{next_time}（{countdown}后）　维护成功次数：{self.web_count}')  # 不显示响应正文或把门户状态混入文件计数。
 
     def stop(self, reason=None):  # 手动停止、VPN失败和睡眠都取消两类请求。
         self.pause_web('WEB_STOPPED', notify=False)  # 先撤销浏览器任务。

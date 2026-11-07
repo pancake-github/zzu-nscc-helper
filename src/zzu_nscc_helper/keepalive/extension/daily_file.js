@@ -121,5 +121,5 @@ async function dailyTransaction(state, request, user) { // 一轮完整业务写
   await dailyApi(state, profile, '/remove.action?recursive=true', {paths: path}, 'POST'); // 平台虽通用递归接口，实际参数只有这个普通文件，没有目录、逗号或通配符。
   progress('absence'); // 完整成功必须再确认文件已不存在。
   if (dailyEntry(await dailyList(state, profile, directory), name, path, false)) dailyError('WEB_CLEANUP_PENDING'); // 清理失败只处理原文件，不开始新轮。
-  record.stage = 'complete'; await dailySave(state, record); progress('complete'); // 仅完整成功后交回桌面开始86400秒计时。
-} // 结束每日事务。
+  record.stage = 'complete'; await dailySave(state, record); progress('complete'); // 仅完整成功后交回桌面开始18000秒计时。
+} // 结束本轮文件事务；保留原恢复记录键以兼容升级。

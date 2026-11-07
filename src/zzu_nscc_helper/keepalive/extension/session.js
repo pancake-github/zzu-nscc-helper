@@ -49,7 +49,7 @@ async function clearWebBinding() { // 取消不再依赖被冻结网页内的脚
   old.latest = null; old.controller?.abort(); // 清除缓存并取消扩展自己的fetch。
   if (old.task) await old.task; // 旧网络任务结束后才允许重新绑定，不等待页面同步。
 } // 结束停止。
-async function runWebRequest(state, request) { // 每轮完整文件交互，桌面独立安排24小时间隔。
+async function runWebRequest(state, request) { // 每轮完整文件交互，桌面独立安排5小时间隔。
   const started = performance.now(); // 单调时钟记录整轮耗时。
   try { // 所有响应与凭据只留在浏览器内存。
     if (!state.identity) { // 手动绑定时先确认当前页面身份和集群。
@@ -84,7 +84,7 @@ async function runWebRequest(state, request) { // 每轮完整文件交互，桌
     if (!WEB_TRANSIENT.has(code)) { state.latest = null; webBinding = null; } // 明确身份或归属不符需要手动处理。
     emit('web_failed', {token: state.token, request, code, settled: true, diagnostic: ['fetch', 'body', 'profile', 'journal'].includes(state.diagnostic) ? state.diagnostic : 'binding', errorKind: ['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError', 'Error'].includes(error?.name) ? error.name : 'Other'}); // 未完成文件日志保留用于下次核对。
   } finally { state.controller = null; } // 单轮结束释放当前网络句柄。
-} // 结束每日请求。
+} // 结束本轮文件交互请求。
 async function webCommand(msg) { // 桌面统一安排所有实际请求时刻。
   if (!['web_bind', 'web_request', 'web_cancel', 'web_stop'].includes(msg.command)) return false; // 兼容原基础协议。
   if (msg.command === 'web_stop') { await clearWebBinding(); return true; } // 停止后不自动恢复。

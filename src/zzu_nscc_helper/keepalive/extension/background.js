@@ -102,7 +102,7 @@ function connect() { // 连接软件内置桥接进程。
     port = current; // 保存当前连接。
     current.onMessage.addListener(msg => { command(msg).catch(() => fail('COMMAND_FAILED')); }); // 捕获异步错误。
     current.onDisconnect.addListener(() => { void chrome.runtime.lastError; if (port !== current) return; port = null; clearBinding(); clearInterval(pulse); pulse = null; }); // 助手退出后停止所有任务。
-    emit('hello', {version: '0.4.0', extensionVersion: '0.5.2', capabilities: ['web-daily-file-v1']}); // 保留旧协议号，新能力须由桌面明确识别。
+    emit('hello', {version: '0.4.0', extensionVersion: '0.5.3', capabilities: ['web-daily-file-v1']}); // 保留文件事务能力标识，5小时周期由配套桌面程序控制。
     listTabs(); // 初次发送列表。
     pulse = setInterval(() => { emit('heartbeat'); }, 2000); // 仅本机心跳。
   } catch (_) { port = null; clearBinding(); } // 不静默恢复旧任务。
